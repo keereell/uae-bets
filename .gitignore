@@ -1,0 +1,40 @@
+.env
+*.pyc
+__pycache__/
+.venv/
+venv/
+.DS_Store
+*.log
+
+# Редакторы и IDE
+.claude/
+.idea/
+.vscode/
+
+# Сырые данные: 16 МБ и 829 файлов. В репозитории лежат только производные
+# data/matches.csv и data/shots.csv, а src/update_data.py догружает недостающее.
+data/raw/
+data/betcity/
+data/rpl/
+
+# Сохранённые страницы букмекера — 14 МБ, нужны только локально.
+# В CI линия берётся через API (см. parse_betcity._from_api).
+Bets/*.mhtml
+
+# Промежуточные выгрузки экспериментов
+data/exp_*.csv
+data/tuning*.csv
+data/tune_transfer.csv
+data/_wf_audit.csv
+data/all_bets.csv
+data/list_*.csv
+data/vs_pinnacle.csv
+data/value_*.csv
+data/walkforward.csv
+data/monitor_log.csv
+data/xg_variants.csv
+data/phantom_backtest.csv
+work/
+
+# ВАЖНО: state.json, data/matches.csv, data/shots.csv, data/picks.csv
+# и data/bets_log.csv НЕ игнорируются — воркфлоу коммитит их обратно.
