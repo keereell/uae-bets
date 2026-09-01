@@ -100,6 +100,11 @@
    }
   },
   "pinnacle": {
+   "Shabab Al Ahli — Al Jazira": {
+    "home": 122.0,
+    "away": 236.0,
+    "draw": 214.0
+   },
    "Al Wasl — Khor Fakkan Club": {
     "home": -335.0,
     "away": 628.0,
@@ -114,13 +119,8 @@
     "home": 101.0,
     "away": 236.0,
     "draw": 267.0
-   },
-   "Shabab Al Ahli — Al Jazira": {
-    "home": 122.0,
-    "away": 236.0,
-    "draw": 214.0
    }
   },
-  "checked_at": "2026-09-01T18:43Z"
+  "checked_at": "2026-09-01T21:28Z"
  }
 }
