@@ -41,14 +41,14 @@
    "4781127": "Baniyas — Hatta Club",
    "4781124": "Shabab Al Ahly — Jazira Abu Dhabi",
    "4781125": "Al Nasr Dubai — Ajman Club",
-   "4781128": "Al Dhafra — Wahda Abu Dhabi",
+   "4781128": "Al Dhafra — Al-Wahda",
    "4820630": "Dubai United — Shabab Al Ahly",
    "4820631": "Jazira Abu Dhabi — Al Nasr Dubai",
    "4820626": "Al Ain — Al Wasl",
    "4820627": "Khor Fakkan — Baniyas",
    "4820628": "Hatta Club — Al Dhafra",
    "4820625": "Ajman Club — Kalba",
-   "4820629": "Wahda Abu Dhabi — Sharjah SC"
+   "4820629": "Al-Wahda — Sharjah SC"
   },
   "betcity": {
    "Аль-Иттихад Калба — Аль-Айн": {
@@ -100,11 +100,6 @@
    }
   },
   "pinnacle": {
-   "Al-Nasr Dubai — Ajman": {
-    "home": 101.0,
-    "away": 236.0,
-    "draw": 267.0
-   },
    "Al Wasl — Khor Fakkan Club": {
     "home": -335.0,
     "away": 628.0,
@@ -115,12 +110,17 @@
     "away": -634.0,
     "draw": 662.0
    },
+   "Al-Nasr Dubai — Ajman": {
+    "home": 101.0,
+    "away": 236.0,
+    "draw": 267.0
+   },
    "Shabab Al Ahli — Al Jazira": {
     "home": 122.0,
     "away": 236.0,
     "draw": 214.0
    }
   },
-  "checked_at": "2026-09-01T15:29Z"
+  "checked_at": "2026-09-01T18:43Z"
  }
 }
