@@ -1,0 +1,115 @@
+name: UAE сторож линии
+
+# Двухступенчатая схема. Полный расчёт переобучает модель заново перед каждым
+# игровым днём (около сотни подгонок) и занимает ~2 минуты — гонять его каждые
+# полчаса значит выйти за бесплатный лимит Actions. Поэтому сначала работает
+# сторож: три запроса, голая стандартная библиотека, без pip install, ~10 секунд.
+# Полный прогон запускается, только если сторож нашёл повод.
+#
+# Поводы: новый матч в расписании, БЕТСИТИ открыла линию, сдвиг цены больше 2%
+# у Pinnacle или у БЕТСИТИ. Сдвиг острой линии — главный: валуй у мягкой конторы
+# живёт ровно в окне, когда острый рынок уже уехал, а мягкий ещё не догнал.
+#
+# Расписание: каждые 30 минут с 05:00 до 21:59 UTC (09:00-01:59 по Дубаю —
+# перекрывает и открытие линии, и все матчи), плюс три ночные проверки.
+on:
+  schedule:
+    - cron: '*/30 5-21 * * *'
+    - cron: '13 22,1,4 * * *'
+  repository_dispatch:
+    types: [uae-watch, run-all]
+  workflow_dispatch:
+    inputs:
+      force_full:
+        description: 'Запустить полный расчёт независимо от сторожа'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Одна очередь на сторожа и на расчёт: иначе два прогона подерутся за state.json.
+concurrency:
+  group: uae-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+      reasons: ${{ steps.check.outputs.reasons }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          # без cache: pip здесь не нужен, сторож на стандартной библиотеке
+
+      - name: Проверить изменения
+        id: check
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          set +e
+          OUT=$(python src/watch.py --json)
+          CODE=$?
+          set -e
+          echo "$OUT"
+          CHANGED=$(python -c "import json,sys; print(str(json.loads(sys.argv[1])['changed']).lower())" "$OUT")
+          REASONS=$(python -c "import json,sys; print(' | '.join(json.loads(sys.argv[1])['reasons'])[:400])" "$OUT")
+          if [ "${{ inputs.force_full }}" = "true" ]; then CHANGED=true; REASONS="запуск вручную"; fi
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "reasons=$REASONS" >> "$GITHUB_OUTPUT"
+          echo "::notice::changed=$CHANGED  $REASONS"
+
+      # Снимок коммитим ДО полного расчёта, чтобы вторая работа его увидела
+      # при своём checkout и не сравнивала с устаревшим состоянием.
+      - name: Commit snapshot
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A state.json 2>/dev/null || true
+          git diff --cached --quiet || {
+            git commit -m "watch: снимок $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+            git pull --rebase --autostash origin ${{ github.ref_name }} || true
+            git push
+          }
+
+  full:
+    needs: watch
+    if: needs.watch.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+
+      - name: Полный расчёт и отправка
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          echo "повод: ${{ needs.watch.outputs.reasons }}"
+          python bot.py --days-back 21
+
+      - name: Commit
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A state.json data/matches.csv data/shots.csv data/bets_log.csv data/shots_raw.jsonl.gz 2>/dev/null || true
+          git diff --cached --quiet || {
+            git commit -m "bets: $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+            git pull --rebase --autostash origin ${{ github.ref_name }} || true
+            git push
+          }
