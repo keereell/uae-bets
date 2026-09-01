@@ -1,9 +1,11 @@
 """
 Бот: обновляет данные, считает ставки, шлёт в Telegram.
 
-    python bot.py            # обычный прогон
-    python bot.py --force    # прислать даже то, что уже отправляли
-    python bot.py --dry      # ничего не слать, только напечатать
+    python bot.py                  # посчитать ставки и прислать
+    python bot.py --mode clv       # зафиксировать закрывающую линию Pinnacle
+    python bot.py --mode settle    # рассчитать сыгравшее и прислать сводку
+    python bot.py --force          # прислать даже то, что уже отправляли
+    python bot.py --dry            # ничего не слать, только напечатать
 
 Что делает:
   1. src/update_data.py  — догружает новые матчи и поударные данные
@@ -139,7 +141,27 @@ def main():
     ap.add_argument('--dry', action='store_true', help='не отправлять, только напечатать')
     ap.add_argument('--days-back', default='60')
     ap.add_argument('--skip-update', action='store_true')
+    ap.add_argument('--mode', default='picks', choices=('picks', 'clv', 'settle'),
+                    help='picks — ставки, clv — цена закрытия, settle — расчёт и сводка')
     a = ap.parse_args()
+
+    if a.mode == 'clv':
+        # перед самым стартом матчей: фиксируем справедливую цену по закрытию
+        run('clv.py', 'update')
+        return 0
+
+    if a.mode == 'settle':
+        run('update_data.py', '14')          # подтянуть свежие счета
+        from settle import settle, digest
+        led = settle()
+        if led is None:
+            return 0
+        text = digest(led)
+        if a.dry:
+            print(text)
+        else:
+            send_message(text)
+        return 0
 
     if not a.skip_update:
         run('update_data.py', a.days_back)
@@ -166,6 +188,7 @@ def main():
 
     ok = send_message(msg)
     if ok:
+        run('clv.py', 'log')       # журнал CLV ведётся автоматически
         for r in fresh:
             state.setdefault('sent', {})[key_of(r)] = {
                 'ev': float(r['ev']), 'кэф': float(r['кэф']),

@@ -25,6 +25,7 @@ ROOT = os.path.dirname(HERE)
 DATA = os.path.join(ROOT, 'data')
 
 from build_shots import metrics_from_game
+import archive
 from build_dataset import STAT_MAP
 
 UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
@@ -127,15 +128,21 @@ def main(days_back=60):
     have = set(S.game_id.astype(int)) if len(S) else set()
     need = [int(g) for g in M2[M2.played.fillna(False)].game_id if int(g) not in have]
     print(f'нужно догрузить ударов: {len(need)}')
-    new_rows = []
+    new_rows, new_raw = [], []
     if need:
         with ThreadPoolExecutor(max_workers=5) as ex:
             for slim in ex.map(fetch_shots, need):
                 if not slim:
                     continue
+                new_raw.append(slim)
                 r = metrics_from_game(slim)
                 if r:
                     new_rows.append(r)
+    if new_raw:
+        # сырые удары тоже кладём в репозиторий: 0.42 МБ в сжатом виде,
+        # зато любую новую метрику можно посчитать без повторной выкачки
+        total = archive.add(new_raw)
+        print(f'в архив сырых ударов добавлено {len(new_raw)}, всего {total}')
     if new_rows:
         S = pd.concat([S, pd.DataFrame(new_rows)], ignore_index=True)
         S = S.drop_duplicates(subset=['game_id'], keep='last')

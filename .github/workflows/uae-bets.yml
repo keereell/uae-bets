@@ -75,7 +75,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # picks.csv и forecast.csv не коммитим: они пересоздаются каждым
           # прогоном и дают конфликт при любом локальном запуске.
-          git add -A state.json data/matches.csv data/shots.csv data/bets_log.csv 2>/dev/null || true
+          git add -A state.json data/matches.csv data/shots.csv data/bets_log.csv data/shots_raw.jsonl.gz 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "изменений нет"
           else

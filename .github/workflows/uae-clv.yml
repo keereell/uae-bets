@@ -1,0 +1,49 @@
+name: UAE закрывающая линия
+
+# Фиксирует справедливую цену Pinnacle прямо перед стартом матчей.
+# Матчи в 17:45 и 20:15 по Дубаю = 13:45 и 16:15 UTC, снимаем за 12 минут.
+#
+# Зачем именно перед стартом: CLV считается относительно ЗАКРЫВАЮЩЕЙ линии,
+# а API Pinnacle отдаёт только открытые рынки — после стартового свистка
+# цену уже не получить. Промах по времени означает потерю наблюдения.
+on:
+  schedule:
+    - cron: '33 13 * * *'
+    - cron: '3 16 * * *'
+  repository_dispatch:
+    types: [uae-clv, run-all]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: uae-clv
+  cancel-in-progress: false
+
+jobs:
+  clv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Снять закрывающую линию
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python bot.py --mode clv
+      - name: Commit
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data/bets_log.csv 2>/dev/null || true
+          git diff --cached --quiet || {
+            git commit -m "clv: закрывающая линия $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+            git pull --rebase --autostash origin ${{ github.ref_name }} || true
+            git push
+          }

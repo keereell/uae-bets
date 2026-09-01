@@ -33,9 +33,9 @@ from teams import to_en
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, 'data', 'bets_log.csv')
 COLS = ['logged_at', 'match_ru', 'match_en', 'kickoff', 'market', 'line', 'outcome',
-        'price_taken', 'model_p', 'edge_pp', 'ev_model',
+        'price_taken', 'model_p', 'edge_pp', 'ev_model', 'ярус',
         'pin_fair_at_log', 'pin_fair_closing', 'closing_updated_at',
-        'stake_pct', 'result', 'pnl']
+        'stake_pct', 'result', 'pnl', 'score']
 
 
 def _now():
@@ -106,7 +106,8 @@ def cmd_log():
             logged_at=_now(), match_ru=m_ru, match_en=f'{h} — {a}', kickoff=start or '',
             market=r['рынок'], line=line, outcome=r['исход'],
             price_taken=r['кэф'], model_p=r.get('p'), edge_pp=r.get('edge_pp'),
-            ev_model=r.get('ev'), pin_fair_at_log=fair, pin_fair_closing=np.nan,
+            ev_model=r.get('ev'), ярус=str(r.get('ярус', '')),
+            pin_fair_at_log=fair, pin_fair_closing=np.nan,
             closing_updated_at='', stake_pct=r.get('Келли_итог_%', r.get('Келли_%')),
             result='', pnl=np.nan)
         added += 1
@@ -122,6 +123,8 @@ def cmd_update():
     sharp = _sharp_matrices()
     upd = 0
     for i, r in led.iterrows():
+        if isinstance(r.get('result'), str) and r['result'].strip():
+            continue          # ставка уже сыграла, цена закрытия не изменится
         parts = [x.strip() for x in str(r['match_ru']).split('—')]
         h_ru, a_ru = (parts + ['', ''])[:2]
         h, a = to_en(h_ru), to_en(a_ru)

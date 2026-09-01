@@ -115,15 +115,24 @@ def metrics_from_game(d, diag=None):
 
 
 def main(data_dir):
-    raw = os.path.join(data_dir, 'raw')
-    shots_dir = os.path.join(raw, 'shots')
+    """Источник ударов: россыпь json в data/raw/shots или сжатый архив."""
+    import archive
+    shots_dir = os.path.join(data_dir, 'raw', 'shots')
     rows, diag = [], collections.Counter()
 
-    for f in sorted(os.listdir(shots_dir)):
-        try:
-            d = json.load(open(os.path.join(shots_dir, f), encoding='utf-8'))
-        except Exception:
-            continue
+    if os.path.isdir(shots_dir) and os.listdir(shots_dir):
+        src = []
+        for f in sorted(os.listdir(shots_dir)):
+            try:
+                src.append(json.load(open(os.path.join(shots_dir, f), encoding='utf-8')))
+            except Exception:
+                pass
+        print(f'источник: россыпь файлов ({len(src)})')
+    else:
+        src = list(archive.load().values())
+        print(f'источник: сжатый архив ({len(src)})')
+
+    for d in src:
         r = metrics_from_game(d, diag)
         if r is not None:
             rows.append(r)
