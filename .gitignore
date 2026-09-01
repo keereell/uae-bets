@@ -34,7 +34,9 @@ data/walkforward.csv
 data/monitor_log.csv
 data/xg_variants.csv
 data/phantom_backtest.csv
+data/picks.csv
+data/forecast.csv
 work/
 
-# ВАЖНО: state.json, data/matches.csv, data/shots.csv, data/picks.csv
-# и data/bets_log.csv НЕ игнорируются — воркфлоу коммитит их обратно.
+# ВАЖНО: state.json, data/matches.csv, data/shots.csv и data/bets_log.csv
+# НЕ игнорируются — воркфлоу коммитит их обратно.
