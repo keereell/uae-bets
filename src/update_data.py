@@ -7,16 +7,20 @@ data/shots.csv, вместе ~230 КБ). Сырые JSON (16 МБ, 829 файл�
 попадают: вместо них скрипт догружает только то, чего ещё нет.
 
   1. Тянет матчи 365scores за окно [сегодня - days_back, сегодня + 45]
-  2. Обновляет строки в matches.csv (новые матчи, изменившиеся счета)
-  3. Догружает поударные данные ТОЛЬКО для сыгранных матчей, которых нет
-     в shots.csv
-  4. Пересобирает объединённую таблицу
+  2. ОБНОВЛЯЕТ в matches.csv только то, что даёт расписание: счёт, статус,
+     дату, коэффициенты. Остальные колонки (статистика матча, xG, удары)
+     НЕ ТРОГАЕТ — замена строки целиком стирала их у всех матчей окна.
+  3. Догружает статистику матча (/web/game/stats/: xG, удары, владение...)
+     для сыгранных матчей, у которых её ещё нет
+  4. Догружает поударные данные для сыгранных матчей, которых нет в shots.csv
+  5. Пересчитывает дни отдыха и пересобирает объединённую таблицу
 
-Так один прогон в CI делает 3-5 запросов вместо 800.
+Так один прогон в CI делает 3-10 запросов вместо 800.
 """
 import json, os, sys, time, urllib.request, datetime as dt
 from concurrent.futures import ThreadPoolExecutor
 
+import numpy as np
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -74,6 +78,40 @@ def fetch_shots(gid):
     return dict(id=gid, chartEvents=g.get('chartEvents'), events=g.get('events'))
 
 
+def fetch_stats(gid):
+    """Статистика матча (та же, что собирал crawl_365/build_dataset)."""
+    d = get(f'{BASE}/web/game/stats/?appTypeId=5&langId=1&games={gid}')
+    if not d:
+        return None
+    out = {}
+    for st in d.get('statistics', []):
+        key = STAT_MAP.get(st.get('name'))
+        if not key:
+            continue
+        v = str(st.get('value', '')).replace('%', '').strip()
+        try:
+            v = float(v)
+        except ValueError:
+            continue
+        out.setdefault(st.get('competitorId'), {})[key] = v
+    return gid, out
+
+
+def rest_days(df):
+    """Дни с предыдущего матча каждой команды в лиге (как в build_dataset)."""
+    df = df.sort_values('ts').copy()
+    last, hr, ar = {}, [], []
+    for _, row in df.iterrows():
+        for side, col in (('home_id', hr), ('away_id', ar)):
+            prev = last.get(row[side])
+            col.append(np.nan if prev is None else (row['ts'] - prev) / 86400.0)
+        if bool(row['played']):
+            last[row['home_id']] = row['ts']
+            last[row['away_id']] = row['ts']
+    df['h_rest'], df['a_rest'] = hr, ar
+    return df
+
+
 def game_row(g):
     """Строка matches.csv из объекта матча 365scores."""
     h, a = g['homeCompetitor'], g['awayCompetitor']
@@ -110,22 +148,61 @@ def main(days_back=60):
         return M
 
     fresh = pd.DataFrame([game_row(g) for g in games.values()])
-    # столбцы статистики матча в новых строках пустые: их даёт build_dataset
-    # из кэша, которого в CI нет. Для модели важны поударные метрики.
+    API_COLS = [c for c in fresh.columns if c != 'game_id']
     if len(M):
-        keep = M[~M.game_id.isin(fresh.game_id)]
-        cols = [c for c in M.columns if c in fresh.columns or c not in fresh.columns]
-        M2 = pd.concat([keep, fresh], ignore_index=True)
-        for c in M.columns:
+        M2 = M.set_index('game_id')
+        F = fresh.set_index('game_id')
+        known = F.index.intersection(M2.index)
+        new = F.index.difference(M2.index)
+        # у известных матчей обновляем ТОЛЬКО поля расписания
+        for c in API_COLS:
             if c not in M2.columns:
-                M2[c] = pd.NA
-        M2 = M2[list(dict.fromkeys(list(M.columns) + list(fresh.columns)))]
+                M2[c] = np.nan
+            M2.loc[known, c] = F.loc[known, c]
+        # новые матчи добавляем целиком
+        if len(new):
+            M2 = pd.concat([M2, F.loc[new]])
+        M2 = M2.reset_index()
+        print(f'обновлено известных матчей: {len(known)}, добавлено новых: {len(new)}')
     else:
         M2 = fresh
+    M2['played'] = M2['played'].fillna(False).astype(bool)
     M2 = M2.sort_values('ts').reset_index(drop=True)
+
+    # --- статистика матча: для сыгранных, у которых её нет
+    # маркер «статистика уже есть» -- владение: оно есть у всех матчей со
+    # статистикой, тогда как xG у ~30 старых матчей отсутствует, и по нему
+    # эти матчи перекачивались бы каждый прогон
+    if 'h_poss' not in M2.columns:
+        M2['h_poss'] = np.nan
+    need_stats = [int(g) for g, pl, x in zip(M2.game_id, M2.played, M2.h_poss)
+                  if pl and pd.isna(x)]
+    print(f'нужно догрузить статистику матча: {len(need_stats)}')
+    if need_stats:
+        hid = M2.set_index('game_id')['home_id'].to_dict()
+        aid = M2.set_index('game_id')['away_id'].to_dict()
+        got = 0
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            for r in ex.map(fetch_stats, need_stats):
+                if not r:
+                    continue
+                gid, st = r
+                hs, as_ = st.get(hid.get(gid), {}), st.get(aid.get(gid), {})
+                if not hs and not as_:
+                    continue
+                idx = M2.index[M2.game_id == gid]
+                for k in set(STAT_MAP.values()):
+                    if 'h_' + k not in M2.columns:
+                        M2['h_' + k] = np.nan
+                        M2['a_' + k] = np.nan
+                    M2.loc[idx, 'h_' + k] = hs.get(k, np.nan)
+                    M2.loc[idx, 'a_' + k] = as_.get(k, np.nan)
+                got += 1
+        print(f'статистика догружена: {got}')
 
     # --- поударные данные: только для сыгранных матчей, которых ещё нет
     have = set(S.game_id.astype(int)) if len(S) else set()
+    have |= set(archive.load().keys())     # матч без ударов тоже в архиве -- не перекачивать
     need = [int(g) for g in M2[M2.played.fillna(False)].game_id if int(g) not in have]
     print(f'нужно догрузить ударов: {len(need)}')
     new_rows, new_raw = [], []
@@ -154,6 +231,7 @@ def main(days_back=60):
     M2 = M2.drop(columns=drop).merge(
         S.drop(columns=[c for c in ('rec_h', 'rec_a') if c in S.columns]),
         on='game_id', how='left')
+    M2 = rest_days(M2)
     M2.to_csv(mpath, index=False, encoding='utf-8-sig')
     played = int(M2.played.fillna(False).sum())
     print(f'стало: матчей {len(M2)}, сыграно {played}, '
