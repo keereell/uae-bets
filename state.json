@@ -111,11 +111,6 @@
     "away": 3.39,
     "draw": 3.07
    },
-   "Al Wasl — Khor Fakkan Club": {
-    "home": 1.2985074626865671,
-    "away": 7.28,
-    "draw": 5.93
-   },
    "Al Ittihad Kalba — Al Ain": {
     "home": 12.06,
     "away": 1.1577287066246056,
@@ -125,8 +120,13 @@
     "home": 2.01,
     "away": 3.36,
     "draw": 3.67
+   },
+   "Al Wasl — Khor Fakkan Club": {
+    "home": 1.2985074626865671,
+    "away": 7.28,
+    "draw": 5.93
    }
   },
-  "checked_at": "2026-09-02T16:26Z"
+  "checked_at": "2026-09-02T17:28Z"
  }
 }
