@@ -105,22 +105,22 @@
     "away": 236.0,
     "draw": 214.0
    },
-   "Al Ittihad Kalba — Al Ain": {
-    "home": 1106.0,
-    "away": -634.0,
-    "draw": 662.0
+   "Al Wasl — Khor Fakkan Club": {
+    "home": -335.0,
+    "away": 628.0,
+    "draw": 493.0
    },
    "Al-Nasr Dubai — Ajman": {
     "home": 101.0,
     "away": 236.0,
     "draw": 267.0
    },
-   "Al Wasl — Khor Fakkan Club": {
-    "home": -335.0,
-    "away": 628.0,
-    "draw": 493.0
+   "Al Ittihad Kalba — Al Ain": {
+    "home": 1106.0,
+    "away": -634.0,
+    "draw": 662.0
    }
   },
-  "checked_at": "2026-09-02T00:14Z"
+  "checked_at": "2026-09-02T05:50Z"
  }
 }
