@@ -28,9 +28,12 @@ on:
 permissions:
   contents: write
 
-# Одна очередь на сторожа и на расчёт: иначе два прогона подерутся за state.json.
+# ОДНА ОЧЕРЕДЬ НА ВСЕ ВОРКФЛОУ. Раньше у каждого была своя, и они
+# коммитили в main одновременно: при конфликте в state.json или
+# bets_log.csv rebase падал, "|| true" глотал ошибку, push отклонялся —
+# и коммит терялся молча. Эти файлы не сливаются автоматически.
 concurrency:
-  group: uae-watch
+  group: uae-repo-write
   cancel-in-progress: false
 
 jobs:
@@ -57,12 +60,25 @@ jobs:
           CODE=$?
           set -e
           echo "$OUT"
+          # Сторож упал -> пустой вывод. Полный расчёт всё равно запускаем:
+          # лучше лишний прогон, чем пропущенный тур из-за сбоя сторожа.
+          if [ -z "$OUT" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "reasons=сторож упал, страхуемся полным расчётом" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           CHANGED=$(python -c "import json,sys; print(str(json.loads(sys.argv[1])['changed']).lower())" "$OUT")
-          REASONS=$(python -c "import json,sys; print(' | '.join(json.loads(sys.argv[1])['reasons'])[:400])" "$OUT")
+          REASONS=$(python -c "import json,sys; print(' | '.join(json.loads(sys.argv[1])['reasons'])[:400].replace(chr(10),' '))" "$OUT")
           if [ "${{ inputs.force_full }}" = "true" ]; then CHANGED=true; REASONS="запуск вручную"; fi
+          # Текст причины произволен (названия команд из API): пишем через
+          # heredoc-разделитель, иначе перенос строки сломал бы key=value.
           echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
-          echo "reasons=$REASONS" >> "$GITHUB_OUTPUT"
-          echo "::notice::changed=$CHANGED  $REASONS"
+          {
+            echo "reasons<<WF_EOF"
+            echo "$REASONS"
+            echo "WF_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::changed=$CHANGED"
 
       # Снимок коммитим ДО полного расчёта, чтобы вторая работа его увидела
       # при своём checkout и не сравнивала с устаревшим состоянием.
@@ -74,8 +90,19 @@ jobs:
           git add -A state.json 2>/dev/null || true
           git diff --cached --quiet || {
             git commit -m "watch: снимок $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
-            git pull --rebase --autostash origin ${{ github.ref_name }} || true
-            git push
+            # Отдельные ретраи: rebase может не сойтись, а "|| true" это
+            # прятал и push молча отклонялся. Файлы состояния не сливаются,
+            # поэтому при конфликте берём СВОЮ версию и пробуем снова.
+            for i in 1 2 3; do
+              git pull --rebase --autostash origin ${{ github.ref_name }} || {
+                git checkout --ours state.json data/bets_log.csv 2>/dev/null || true
+                git add -A state.json data/bets_log.csv 2>/dev/null || true
+                git rebase --continue || git rebase --abort || true
+              }
+              git push && break
+              echo "push $i не прошёл, повтор"
+              sleep 5
+            done
           }
 
   full:
@@ -93,13 +120,17 @@ jobs:
           cache: 'pip'
       - run: pip install -r requirements.txt
 
+      # WATCH_REASONS передаётся переменной окружения, а не подстановкой ${{ }}
+      # в тело скрипта: в нём названия команд из внешнего API, и кавычка или
+      # $(...) внутри выполнилась бы как код от имени воркфлоу.
       - name: Полный расчёт и отправка
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PYTHONIOENCODING: utf-8
+          WATCH_REASONS: ${{ needs.watch.outputs.reasons }}
         run: |
-          echo "повод: ${{ needs.watch.outputs.reasons }}"
+          echo "повод: $WATCH_REASONS"
           python bot.py --days-back 21
 
       - name: Commit
@@ -110,6 +141,17 @@ jobs:
           git add -A state.json data/matches.csv data/shots.csv data/bets_log.csv data/shots_raw.jsonl.gz 2>/dev/null || true
           git diff --cached --quiet || {
             git commit -m "bets: $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
-            git pull --rebase --autostash origin ${{ github.ref_name }} || true
-            git push
+            # Отдельные ретраи: rebase может не сойтись, а "|| true" это
+            # прятал и push молча отклонялся. Файлы состояния не сливаются,
+            # поэтому при конфликте берём СВОЮ версию и пробуем снова.
+            for i in 1 2 3; do
+              git pull --rebase --autostash origin ${{ github.ref_name }} || {
+                git checkout --ours state.json data/bets_log.csv 2>/dev/null || true
+                git add -A state.json data/bets_log.csv 2>/dev/null || true
+                git rebase --continue || git rebase --abort || true
+              }
+              git push && break
+              echo "push $i не прошёл, повтор"
+              sleep 5
+            done
           }

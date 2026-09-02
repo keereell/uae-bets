@@ -97,6 +97,29 @@ def fetch_stats(gid):
     return gid, out
 
 
+def canonical_names(df):
+    """
+    Одно имя на команду. 365scores меняет написание между сезонами
+    ('Al-Wahda' -> 'Wahda Abu Dhabi' при том же id 8350), и модель считает
+    одну команду за две: 53 матча против 2, рейтинг новичка вместо настоящего.
+    Каноническим берём самое частое имя для каждого id.
+    """
+    pairs = pd.concat([
+        df[['home_id', 'home']].rename(columns={'home_id': 'id', 'home': 'name'}),
+        df[['away_id', 'away']].rename(columns={'away_id': 'id', 'away': 'name'})])
+    pairs = pairs.dropna()
+    best = (pairs.groupby(['id', 'name']).size().reset_index(name='n')
+            .sort_values(['id', 'n'], ascending=[True, False])
+            .drop_duplicates('id').set_index('id')['name'].to_dict())
+    before = set(df.home) | set(df.away)
+    df['home'] = df['home_id'].map(best).fillna(df['home'])
+    df['away'] = df['away_id'].map(best).fillna(df['away'])
+    dropped = before - (set(df.home) | set(df.away))
+    if dropped:
+        print(f'приведены к каноническим именам: {sorted(dropped)}')
+    return df
+
+
 def rest_days(df):
     """Дни с предыдущего матча каждой команды в лиге (как в build_dataset)."""
     df = df.sort_values('ts').copy()
@@ -116,14 +139,22 @@ def game_row(g):
     """Строка matches.csv из объекта матча 365scores."""
     h, a = g['homeCompetitor'], g['awayCompetitor']
     t = dt.datetime.fromisoformat(g['startTime'])
-    played = g.get('statusGroup') == 4
+    # statusGroup==4 значит «матч обработан», а не «сыгран»: перенесённые и
+    # отменённые тоже попадают сюда, но со счётом -1. Такие строки уходили
+    # в обучение и в оценку как ничьи 0:0 — три штуки уже лежали в данных.
+    hs, as_ = h.get('score'), a.get('score')
+    played = (g.get('statusGroup') == 4
+              and str(g.get('statusText', '')).strip().lower() in (
+                  'ended', 'final', 'ft', 'after et', 'after penalties')
+              and hs is not None and as_ is not None
+              and float(hs) >= 0 and float(as_) >= 0)
     r = dict(game_id=g['id'], season=g['seasonNum'], round=g.get('roundNum', 0),
              date=t.date().isoformat(), ts=t.timestamp(),
              kickoff_hour=t.hour + t.minute / 60.0, weekday=t.weekday(),
              played=played, status=g.get('statusText'),
              home_id=h['id'], home=h['name'], away_id=a['id'], away=a['name'],
-             hg=h.get('score') if played else None,
-             ag=a.get('score') if played else None)
+             hg=hs if played else None,
+             ag=as_ if played else None)
     o = g.get('odds') or {}
     r['book'] = (o.get('bookmaker') or {}).get('name')
     for op in o.get('options', []):
@@ -167,6 +198,17 @@ def main(days_back=60):
     else:
         M2 = fresh
     M2['played'] = M2['played'].fillna(False).astype(bool)
+    M2 = canonical_names(M2)
+    # Санитария существующих строк: API больше не отдаёт матчи, отменённые
+    # давно, поэтому обновление их не чинит. Перенесённые попадали в CSV со
+    # счётом -1:-1 и played=True -- в обучении это ничья 0:0, в оценке тоже.
+    bad = (M2.hg.fillna(0) < 0) | (M2.ag.fillna(0) < 0) | (
+        M2.played & ~M2.status.fillna('').str.strip().str.lower().isin(
+            ['ended', 'final', 'ft', 'after et', 'after penalties']))
+    if bad.any():
+        print(f'снято с учёта как несыгранные: {int(bad.sum())} '
+              f'({sorted(set(M2.loc[bad, "status"].fillna("?")))})')
+        M2.loc[bad, ['played', 'hg', 'ag']] = [False, np.nan, np.nan]
     M2 = M2.sort_values('ts').reset_index(drop=True)
 
     # --- статистика матча: для сыгранных, у которых её нет

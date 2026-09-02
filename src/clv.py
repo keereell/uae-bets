@@ -57,10 +57,31 @@ def _sharp_matrices():
     return out
 
 
+# Колонки, куда пишутся строки. Пустой CSV читается как float64, и .at со
+# строкой падает TypeError (pandas 3). Из-за этого шаг фиксации закрывающей
+# линии падал целиком — а он и есть весь смысл журнала.
+TEXT_COLS = ('logged_at', 'match_ru', 'match_en', 'kickoff', 'market', 'line',
+             'outcome', 'ярус', 'closing_updated_at', 'result', 'score')
+NUM_COLS = ('price_taken', 'model_p', 'edge_pp', 'ev_model', 'stake_pct',
+            'pin_fair_at_log', 'pin_fair_closing', 'pnl')
+
+
+def _coerce(df):
+    for c in TEXT_COLS:
+        if c not in df.columns:
+            df[c] = ''
+        df[c] = df[c].astype('object').where(df[c].notna(), '')
+    for c in NUM_COLS:
+        if c not in df.columns:
+            df[c] = np.nan
+        df[c] = pd.to_numeric(df[c], errors='coerce')
+    return df
+
+
 def _load():
     if os.path.exists(LEDGER):
-        return pd.read_csv(LEDGER, encoding='utf-8-sig')
-    return pd.DataFrame(columns=COLS)
+        return _coerce(pd.read_csv(LEDGER, encoding='utf-8-sig'))
+    return _coerce(pd.DataFrame(columns=COLS))
 
 
 def _save(df):

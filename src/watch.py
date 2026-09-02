@@ -40,6 +40,17 @@ PIN_MATCHUPS = 'https://guest.api.arcadia.pinnacle.com/0.1/leagues/8126/matchups
 PIN_KEY = 'CmX2KcMrXuFmNg6YFbmTxE0y9CIrOi0R'
 
 
+def _to_decimal(a):
+    """
+    Pinnacle отдаёт АМЕРИКАНСКИЕ коэффициенты. Сравнивать их относительным
+    порогом нельзя: сдвиг 2% в американских — это от 0.65% (на -200) до 1.5%
+    (на +300) в десятичных, и шкала рвётся около нуля. Один и тот же порог
+    означал бы разное для фаворитов и аутсайдеров.
+    """
+    a = float(a)
+    return 1.0 + (a / 100.0 if a > 0 else 100.0 / abs(a))
+
+
 def get(url, headers=None, timeout=40):
     h = {'User-Agent': UA, 'Accept': 'application/json'}
     h.update(headers or {})
@@ -101,7 +112,7 @@ def line_pinnacle():
         nm = names.get(k.get('matchupId'))
         if not nm:
             continue
-        out[nm] = {p['designation']: float(p['price']) for p in k.get('prices', [])
+        out[nm] = {p['designation']: _to_decimal(p['price']) for p in k.get('prices', [])
                    if p.get('price') is not None}
     return out
 
@@ -131,6 +142,18 @@ def check():
     fx = fixtures_365()
     bc = line_betcity()
     pn = line_pinnacle()
+
+    # Если источник не ответил, он вернёт пустой словарь. Записать пустоту в
+    # снимок значит: на следующем прогоне всё покажется новым, а если сбой
+    # повторится — реальные изменения будут молча пропущены. При пустом
+    # ответе оставляем прошлый срез этого источника.
+    stale = []
+    if not fx and prev.get('fixtures'):
+        fx = prev['fixtures']; stale.append('365scores')
+    if not bc and prev.get('betcity'):
+        bc = prev['betcity']; stale.append('betcity')
+    if not pn and prev.get('pinnacle'):
+        pn = prev['pinnacle']; stale.append('pinnacle')
 
     reasons = []
     new_fx = sorted(set(fx) - set(prev.get('fixtures', {})))
@@ -162,7 +185,7 @@ def check():
     json.dump(st, open(tmp, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     os.replace(tmp, STATE)
 
-    return dict(changed=bool(reasons), reasons=reasons,
+    return dict(changed=bool(reasons), reasons=reasons, stale=stale,
                 n_fixtures=len(fx), n_betcity=len(bc), n_pinnacle=len(pn))
 
 
@@ -173,6 +196,8 @@ if __name__ == '__main__':
     else:
         print(f"матчей в расписании {r['n_fixtures']}, в линии БЕТСИТИ {r['n_betcity']}, "
               f"у Pinnacle {r['n_pinnacle']}")
+        if r.get('stale'):
+            print('ИСТОЧНИКИ НЕ ОТВЕТИЛИ (снимок оставлен прежний):', ', '.join(r['stale']))
         if r['changed']:
             print('ЕСТЬ ИЗМЕНЕНИЯ:')
             for x in r['reasons']:

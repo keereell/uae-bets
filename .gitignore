@@ -41,3 +41,10 @@ work/
 
 # ВАЖНО: state.json, data/matches.csv, data/shots.csv и data/bets_log.csv
 # НЕ игнорируются — воркфлоу коммитит их обратно.
+
+# Черновики второго раунда экспериментов и выгрузки ревью
+src/exp2_*.py
+data/_*.csv
+data/_review_findings.json
+data/lineups.csv
+data/exp2_*.csv
