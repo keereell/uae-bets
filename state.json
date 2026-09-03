@@ -107,9 +107,9 @@
   },
   "pinnacle": {
    "Al Wasl — Khor Fakkan Club": {
-    "home": 1.2985074626865671,
-    "away": 7.28,
-    "draw": 5.93
+    "home": 1.3134796238244515,
+    "away": 6.99,
+    "draw": 5.82
    },
    "Al Ittihad Kalba — Al Ain": {
     "home": 12.06,
@@ -127,6 +127,6 @@
     "draw": 3.07
    }
   },
-  "checked_at": "2026-09-03T09:16Z"
+  "checked_at": "2026-09-03T13:40Z"
  }
 }
