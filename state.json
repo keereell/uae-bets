@@ -106,10 +106,10 @@
    }
   },
   "pinnacle": {
-   "Shabab Al Ahli — Al Jazira": {
-    "home": 2.24,
-    "away": 3.39,
-    "draw": 3.07
+   "Al Wasl — Khor Fakkan Club": {
+    "home": 1.2985074626865671,
+    "away": 7.28,
+    "draw": 5.93
    },
    "Al Ittihad Kalba — Al Ain": {
     "home": 12.06,
@@ -121,12 +121,12 @@
     "away": 3.36,
     "draw": 3.67
    },
-   "Al Wasl — Khor Fakkan Club": {
-    "home": 1.2985074626865671,
-    "away": 7.28,
-    "draw": 5.93
+   "Shabab Al Ahli — Al Jazira": {
+    "home": 2.24,
+    "away": 3.39,
+    "draw": 3.07
    }
   },
-  "checked_at": "2026-09-03T05:47Z"
+  "checked_at": "2026-09-03T09:16Z"
  }
 }
