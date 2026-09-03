@@ -31,7 +31,7 @@ from pricing import price_bet
 from predict import best_params, MAIN_MARKETS
 from teams import to_en
 import pinnacle
-from sharp import pinnacle_constraints, fit_from_constraints, NAME_MAP
+from sharp import pinnacle_constraints, fit_from_constraints, NAME_MAP, fair_ev
 from implied import fit_implied
 from round_calib import fit_round_calibration, apply_round_calibration, loo_calibration
 
@@ -124,12 +124,13 @@ def main():
         pin = pinnacle.parse()
     except Exception:
         pin = {}
-    sharp = {}
+    sharp, pin_raw = {}, {}
     for g in pin.values():
+        key = (NAME_MAP.get(g['home'], g['home']), NAME_MAP.get(g['away'], g['away']))
+        pin_raw[key] = g
         c = pinnacle_constraints(g)
         if len(c) >= 5:
-            sharp[(NAME_MAP.get(g['home'], g['home']),
-                   NAME_MAP.get(g['away'], g['away']))] = fit_from_constraints(c)
+            sharp[key] = fit_from_constraints(c)
 
     # ---------- ПРОХОД 1: калибровка тура
     pages = load_all()
@@ -254,14 +255,15 @@ def main():
                 i = {'1': 0, 'X': 1, '2': 2}[r['outcome']]
                 lo, hi = devig_band([ml['1'], ml['X'], ml['2']], i)
                 band = (w - hi, w - lo)           # худший и лучший перевес
-            ppin = None
-            if Ms is not None:
-                s = price_bet(Ms, r['market'], r['line'], r['outcome'], h_ru, a_ru)
-                if s and s[0] > 1e-6:
-                    ppin = s[0] * price - (1 - s[1])
+            # Прямая цена Pinnacle там, где он торгует рынок сам; подгонка —
+            # только для остальных. Подгонка добавляет собственную ошибку формы:
+            # на 1X2 Шабаба она давала -3.2% против -3.7...-5.0% у прямого де-вига.
+            ppin, pin_src = fair_ev(pin_raw.get((h, a)), Ms, r['market'], r['line'],
+                                    r['outcome'], price, h_ru, a_ru)
             cand.append(dict(матч=f'{h_ru} — {a_ru}', рынок=r['market'], линия=r['line'],
                              исход=r['outcome'], кэф=price, p=w, p_cond=p_cond, fair=fair,
                              edge_pp=edge_pp, ev=ev, band=band, ev_pin=ppin,
+                             pin_src=pin_src,
                              осн=r['market'] in MAIN_MARKETS))
 
         C = pd.DataFrame(cand)
@@ -274,12 +276,17 @@ def main():
         in_corridor = ((C.ev >= EV_LO) & (C.ev <= EV_HI)
                        & (C.edge_pp >= EDGE_LO) & (C.edge_pp <= EDGE_HI))
         # шум подгонки линии Pinnacle именно для этого матча
-        noise = 2.0 * float(sharp.get((h, a), {}).get('rmse', 0.02))
+        # Полоса «рынок молчит» — это погрешность ПОДГОНКИ. У прямой цены
+        # Pinnacle её нет, поэтому там полоса узкая: только разброс методов
+        # снятия маржи, около 1 п.п.
+        noise_fit = 2.0 * float(sharp.get((h, a), {}).get('rmse', 0.02))
+        noise_direct = 0.01
+        C['шум'] = np.where(C.pin_src == 'прямая', noise_direct, noise_fit)
         C['ярус'] = np.where(
             ~in_corridor, '',
             np.where(C.ev_pin.isna(), '?',
-                     np.where(C.ev_pin > noise, '1',
-                              np.where(C.ev_pin >= -noise, '2', '3'))))
+                     np.where(C.ev_pin > C['шум'], '1',
+                              np.where(C.ev_pin >= -C['шум'], '2', '3'))))
         tier1 = C[C['ярус'] == '1'].sort_values('ev', ascending=False)
         tier2 = C[C['ярус'] == '2'].sort_values('ev', ascending=False)
         tier3 = C[C['ярус'] == '3'].sort_values('ev', ascending=False)
@@ -288,7 +295,8 @@ def main():
         n_corr = int(in_corridor.sum())
 
         print(f'Отбор. В коридоре EV {EV_LO:.0%}-{EV_HI:.0%}: {n_corr} исходов. '
-              f'Рынок подтверждает: {len(tier1)}; молчит (в пределах ±{100*noise:.1f}%): '
+              f'Рынок подтверждает: {len(tier1)}; молчит '
+              f'(±{100*noise_direct:.1f}% на прямой цене, ±{100*noise_fit:.1f}% на подгонке): '
               f'{len(tier2)}; возражает: {len(tier3)}; не торгует: {len(tierQ)}.')
 
         def _line(r, tag):

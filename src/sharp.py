@@ -29,7 +29,10 @@ from backtest import walk_forward
 from predict import best_params, MAIN_MARKETS
 from teams import to_en
 import pinnacle
+import re
 from scipy.optimize import minimize
+
+NUM = r'([+-]?\d+(?:[.,]\d+)?)'
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 pd.set_option('display.width', 250)
@@ -84,6 +87,92 @@ def fit_from_constraints(cons, rho0=0.0):
     rep = [dict(kind=k, arg=a, target=t, fitted=_prob(k, a, M)) for k, a, t, _ in cons]
     rmse = float(np.sqrt(np.mean([(r['fitted'] - r['target']) ** 2 for r in rep if r['fitted'] is not None])))
     return dict(lh=lh, la=la, rho=rho, M=M, rmse=rmse, n=len(cons), report=rep)
+
+
+# ---------------------------------------------------------------------------
+#            ПРЯМАЯ ЦЕНА PINNACLE ВМЕСТО ПОДГОНКИ, ГДЕ ОНА ЕСТЬ
+# ---------------------------------------------------------------------------
+DEVIG_DIRECT = 'power'      # см. обоснование в docstring ниже
+
+
+def direct_fair(g, market, line, outcome):
+    """
+    Справедливая цена по ЛИНИИ Pinnacle напрямую, без подгонки распределения.
+
+    Подгонка нужна только для рынков, которых у Pinnacle нет. Там же, где он
+    котирует сам (1X2, тотал на этой линии, фора на этой линии), подгонка лишь
+    добавляет собственную ошибку формы: на матче Шабаб — Аль-Джазира она дала
+    EV -3.2%, а прямой де-виг -3.7...-5.0% по всем пяти методам.
+
+    Метод снятия маржи -- степенной: на двусторонних рынках он и
+    мультипликативный различаются в третьем знаке, а на трёхстороннем 1X2
+    даёт середину разброса пяти методов.
+
+    -> (win, push, lose) как у price_bet, либо None если прямой цены нет.
+    """
+    mk = (market or '').strip()
+    oc = (outcome or '').strip()
+
+    if mk == '1X2':
+        ml = g.get('moneyline') or {}
+        if not all(k in ml for k in ('home', 'draw', 'away')):
+            return None
+        q = DEVIG[DEVIG_DIRECT]([ml['home'], ml['draw'], ml['away']])
+        i = {'1': 0, 'X': 1, '2': 2}.get(oc)
+        if i is None:
+            return None
+        return (float(q[i]), 0.0, float(1 - q[i]))
+
+    if mk in ('Тотал', 'Азиатский тотал'):
+        m = re.search(NUM, str(line or ''))
+        if not m:
+            return None
+        L = float(m.group(1).replace(',', '.'))
+        v = (g.get('totals') or {}).get(L)
+        if not v or 'over' not in v or 'under' not in v:
+            return None
+        q = DEVIG[DEVIG_DIRECT]([v['over'], v['under']])
+        # прямая котировка даёт вероятность УЖЕ без возврата: на целой линии
+        # Pinnacle её просто не выставляет, поэтому push здесь всегда 0
+        if oc.startswith('Бол'):
+            return (float(q[0]), 0.0, float(q[1]))
+        if oc.startswith('Мен'):
+            return (float(q[1]), 0.0, float(q[0]))
+        return None
+
+    if mk in ('Фора', 'Азиатская фора'):
+        m = re.match(r'Ф([12])\s*\(' + NUM + r'\)', oc)
+        if not m:
+            return None
+        side, L = m.group(1), float(m.group(2).replace(',', '.'))
+        # у Pinnacle линия форы записана со стороны ХОЗЯЕВ
+        key = L if side == '1' else -L
+        v = (g.get('spreads') or {}).get(key)
+        if not v or 'home' not in v or 'away' not in v:
+            return None
+        q = DEVIG[DEVIG_DIRECT]([v['home'], v['away']])
+        i = 0 if side == '1' else 1
+        return (float(q[i]), 0.0, float(q[1 - i]))
+
+    return None
+
+
+def fair_ev(g, M_fit, market, line, outcome, price, h_ru='', a_ru=''):
+    """
+    Матожидание ставки против Pinnacle. Прямая цена, если Pinnacle торгует
+    этот рынок сам; иначе — подгонка. -> (ev, источник) либо (None, None).
+    """
+    r = direct_fair(g, market, line, outcome) if g else None
+    src = 'прямая'
+    if r is None:
+        if M_fit is None:
+            return None, None
+        r = price_bet(M_fit, market, line, outcome, h_ru, a_ru)
+        src = 'подгонка'
+    if r is None or r[0] <= 1e-6:
+        return None, None
+    w, pu, l = r
+    return w * price - (1 - pu), src
 
 
 NAME_MAP = {
