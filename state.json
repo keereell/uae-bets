@@ -111,15 +111,15 @@
     "away": 3.39,
     "draw": 3.07
    },
-   "Al-Nasr Dubai — Ajman": {
-    "home": 2.01,
-    "away": 3.36,
-    "draw": 3.67
-   },
    "Al Ittihad Kalba — Al Ain": {
     "home": 12.6,
     "away": 1.1642036124794746,
     "draw": 7.83
+   },
+   "Al-Nasr Dubai — Ajman": {
+    "home": 2.01,
+    "away": 3.36,
+    "draw": 3.67
    },
    "Al Wasl — Khor Fakkan Club": {
     "home": 1.341296928327645,
@@ -127,6 +127,6 @@
     "draw": 5.81
    }
   },
-  "checked_at": "2026-09-03T19:58Z"
+  "checked_at": "2026-09-03T22:12Z"
  }
 }
