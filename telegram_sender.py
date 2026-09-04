@@ -32,6 +32,17 @@ def _split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list:
     return chunks
 
 
+def _redact(s: str, token: str) -> str:
+    """Убрать токен из любого текста, который может уйти в лог."""
+    s = str(s)
+    if token:
+        s = s.replace(token, '<токен скрыт>')
+        head = token.split(':')[0]
+        if head and len(head) >= 6:
+            s = s.replace(head, '<токен скрыт>')
+    return s
+
+
 def send_message(text: str, bot_token: Optional[str] = None,
                  chat_id: Optional[str] = None,
                  parse_mode: str = 'HTML',
@@ -62,12 +73,18 @@ def send_message(text: str, bot_token: Optional[str] = None,
         try:
             r = requests.post(url, data=payload, timeout=30)
             if r.status_code != 200:
-                print(f'[telegram] часть {i+1} не ушла: {r.status_code} {r.text}')
+                print(f'[telegram] часть {i+1} не ушла: {r.status_code} '
+                      f'{_redact(r.text, bot_token)}')
                 ok = False
             if i + 1 < len(chunks):
                 time.sleep(0.3)
         except Exception as e:
-            print(f'[telegram] часть {i+1}, ошибка: {e}')
+            # Текст исключения requests почти всегда содержит полный URL,
+            # а в URL лежит токен. Логи прогонов Actions на публичном
+            # репозитории видны всем. Маскировка секретов на стороне GitHub
+            # это ловит, но закладываться на неё как на единственный барьер
+            # нельзя: она срабатывает только на точное совпадение строки.
+            print(f'[telegram] часть {i+1}, ошибка: {_redact(str(e), bot_token)}')
             ok = False
     return ok
 
