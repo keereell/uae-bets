@@ -160,19 +160,26 @@ def direct_fair(g, market, line, outcome):
 def fair_ev(g, M_fit, market, line, outcome, price, h_ru='', a_ru=''):
     """
     Матожидание ставки против Pinnacle. Прямая цена, если Pinnacle торгует
-    этот рынок сам; иначе — подгонка. -> (ev, источник) либо (None, None).
+    этот рынок сам; иначе — подгонка.
+
+    -> (ev, источник, p_острая) либо (None, None, None), где p_острая --
+    вероятность выигрыша ПРИ УСЛОВИИ «не возврат», выведенная из острой линии.
+    Именно её, а не вероятность модели, следует подставлять в Келли: модель
+    на этой лиге систематически расходится с рынком не в свою пользу
+    (в каждом бакете расхождения факт ближе к рынку; Бриер 0.1902 против
+    0.1846), и размер ставки по её вероятности завышен в разы.
     """
     r = direct_fair(g, market, line, outcome) if g else None
     src = 'прямая'
     if r is None:
         if M_fit is None:
-            return None, None
+            return None, None, None
         r = price_bet(M_fit, market, line, outcome, h_ru, a_ru)
         src = 'подгонка'
     if r is None or r[0] <= 1e-6:
-        return None, None
+        return None, None, None
     w, pu, l = r
-    return w * price - (1 - pu), src
+    return w * price - (1 - pu), src, w / max(w + l, 1e-9)
 
 
 NAME_MAP = {
