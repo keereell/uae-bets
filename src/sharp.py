@@ -61,9 +61,19 @@ def pinnacle_constraints(g):
     return cons
 
 
-def fit_from_constraints(cons, rho0=0.0):
+def fit_from_constraints(cons, rho0=0.0, fix_rho=None):
+    """
+    Восстановить распределение счёта по котировкам Pinnacle.
+
+    fix_rho -- зафиксировать параметр формы вместо подгонки. Нужен для
+    ЧЕСТНОЙ оценки погрешности на рынках, которых Pinnacle не котирует:
+    RMSE меряет отклонение от опорных точек, а производный рынок лежит
+    ЗА их пределами, и там ошибка формы больше измеренной. Две подгонки
+    с разной формой дают вилку, внутри которой правда.
+    """
     def loss(th):
-        lh, la, rho = np.exp(th[0]), np.exp(th[1]), th[2]
+        lh, la = np.exp(th[0]), np.exp(th[1])
+        rho = fix_rho if fix_rho is not None else th[2]
         try:
             M = score_matrix(lh, la, rho)
         except Exception:
@@ -82,7 +92,7 @@ def fit_from_constraints(cons, rho0=0.0):
         if r.fun < bv:
             bv, best = r.fun, r
     lh, la = float(np.exp(best.x[0])), float(np.exp(best.x[1]))
-    rho = float(np.clip(best.x[2], -0.25, 0.20))
+    rho = float(fix_rho) if fix_rho is not None else float(np.clip(best.x[2], -0.25, 0.20))
     M = score_matrix(lh, la, rho)
     rep = [dict(kind=k, arg=a, target=t, fitted=_prob(k, a, M)) for k, a, t, _ in cons]
     rmse = float(np.sqrt(np.mean([(r['fitted'] - r['target']) ** 2 for r in rep if r['fitted'] is not None])))
@@ -180,6 +190,28 @@ def fair_ev(g, M_fit, market, line, outcome, price, h_ru='', a_ru=''):
         return None, None, None
     w, pu, l = r
     return w * price - (1 - pu), src, w / max(w + l, 1e-9)
+
+
+def shape_spread(M_alt, market, line, outcome, price, h_ru='', a_ru=''):
+    """
+    Та же ставка, оценённая по АЛЬТЕРНАТИВНОЙ форме распределения,
+    подогнанной под те же котировки. -> ev либо None.
+
+    Зачем. На матче Шабаб — Аль-Джазира комбо «победа и ТБ 1.5» по цене 2.70
+    давало +3.6% при форме с подогнанным rho и -1.3% при rho=0, хотя обе
+    формы описывают одну и ту же линию Pinnacle с RMSE около 1.5%. Разница
+    целиком в доле побед крупнее 1:0 (0.870 против 0.843) -- величине,
+    которую Pinnacle не котирует и которая поэтому ничем не закреплена.
+    Полоса 2xRMSE такую ошибку не ловит: RMSE меряет попадание в ОПОРНЫЕ
+    точки, а не в экстраполяцию за ними.
+    """
+    if M_alt is None:
+        return None
+    r = price_bet(M_alt, market, line, outcome, h_ru, a_ru)
+    if r is None or r[0] <= 1e-6:
+        return None
+    w, pu, l = r
+    return w * price - (1 - pu)
 
 
 NAME_MAP = {

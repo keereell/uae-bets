@@ -31,7 +31,8 @@ from pricing import price_bet
 from predict import best_params, MAIN_MARKETS
 from teams import to_en
 import pinnacle
-from sharp import pinnacle_constraints, fit_from_constraints, NAME_MAP, fair_ev
+from sharp import (pinnacle_constraints, fit_from_constraints, NAME_MAP,
+                   fair_ev, shape_spread)
 from implied import fit_implied
 from round_calib import fit_round_calibration, apply_round_calibration, loo_calibration
 
@@ -124,13 +125,18 @@ def main():
         pin = pinnacle.parse()
     except Exception:
         pin = {}
-    sharp, pin_raw = {}, {}
+    sharp, sharp_alt, pin_raw = {}, {}, {}
     for g in pin.values():
         key = (NAME_MAP.get(g['home'], g['home']), NAME_MAP.get(g['away'], g['away']))
         pin_raw[key] = g
         c = pinnacle_constraints(g)
         if len(c) >= 5:
             sharp[key] = fit_from_constraints(c)
+            # Вторая форма под те же котировки. Она нужна не для точности,
+            # а чтобы увидеть, насколько цена держится на форме, которую
+            # Pinnacle не котирует. Расхождение двух форм -- честная
+            # погрешность производного рынка.
+            sharp_alt[key] = fit_from_constraints(c, fix_rho=0.0)
 
     # ---------- ПРОХОД 1: калибровка тура
     pages = load_all()
@@ -234,6 +240,7 @@ def main():
                                outcome=f"{tag} ({'+' if v >= 0 else ''}{v:g})", price=ml[ko]))
 
         Ms = sharp.get((h, a), {}).get('M')
+        Ms_alt = sharp_alt.get((h, a), {}).get('M')
         cand = []
         for r in mr:
             pm = price_bet(M, r['market'], r['line'], r['outcome'], h_ru, a_ru)
@@ -260,10 +267,17 @@ def main():
             # на 1X2 Шабаба она давала -3.2% против -3.7...-5.0% у прямого де-вига.
             ppin, pin_src, p_sharp = fair_ev(pin_raw.get((h, a)), Ms, r['market'],
                                              r['line'], r['outcome'], price, h_ru, a_ru)
+            # Для производных рынков берём ХУДШУЮ из двух форм. Оптимистичная
+            # оценка на неподкреплённом параметре -- это не находка, а иллюзия.
+            pin_alt = (shape_spread(Ms_alt, r['market'], r['line'], r['outcome'],
+                                    price, h_ru, a_ru)
+                       if pin_src == 'подгонка' else None)
+            if ppin is not None and pin_alt is not None:
+                ppin = min(ppin, pin_alt)
             cand.append(dict(матч=f'{h_ru} — {a_ru}', рынок=r['market'], линия=r['line'],
                              исход=r['outcome'], кэф=price, p=w, p_cond=p_cond, fair=fair,
                              edge_pp=edge_pp, ev=ev, band=band, ev_pin=ppin,
-                             pin_src=pin_src, p_sharp=p_sharp,
+                             pin_src=pin_src, p_sharp=p_sharp, ev_pin_alt=pin_alt,
                              осн=r['market'] in MAIN_MARKETS))
 
         C = pd.DataFrame(cand)
