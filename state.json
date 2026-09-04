@@ -167,20 +167,10 @@
    }
   },
   "pinnacle": {
-   "Bani Yas — Hatta": {
-    "home": 1.819672131147541,
-    "away": 3.75,
-    "draw": 3.95
-   },
    "Sharjah FC — Dubai United": {
     "home": 1.4504504504504505,
     "away": 5.75,
     "draw": 4.720000000000001
-   },
-   "Al Ain — Al Wasl": {
-    "home": 1.704225352112676,
-    "away": 4.26,
-    "draw": 4.0
    },
    "Al-Nasr Dubai — Ajman": {
     "home": 2.01,
@@ -191,8 +181,18 @@
     "home": 2.19,
     "away": 3.63,
     "draw": 3.1
+   },
+   "Bani Yas — Hatta": {
+    "home": 1.819672131147541,
+    "away": 3.75,
+    "draw": 3.95
+   },
+   "Al Ain — Al Wasl": {
+    "home": 1.704225352112676,
+    "away": 4.26,
+    "draw": 4.0
    }
   },
-  "checked_at": "2026-09-04T19:42Z"
+  "checked_at": "2026-09-04T21:54Z"
  }
 }
