@@ -163,6 +163,61 @@ def heat_index(t, rh):
     return np.where(t < 27.0, t, hi)
 
 
+def add_lineup_factors(m):
+    """
+    Насколько сегодняшний состав близок к обычному для этой команды.
+
+    Отсутствие ключевых игроков -- один из немногих факторов, который и меняется
+    от матча к матчу, и НЕ поглощён рейтингом команды: рейтинг усредняет силу
+    по всем составам, а сегодня на поле конкретные одиннадцать.
+
+    core   -- доля «обычной одиннадцатки» (11 самых играющих за прошлые 10 матчей)
+              в сегодняшнем составе; 1.0 = вышли все, кто обычно выходит;
+    rot    -- доля сегодняшнего состава, не выходившего в стартовом составе
+              ни в одном из трёх последних матчей (ротация).
+
+    Считается СТРОГО по прошлому: сегодняшний состав в историю не входит.
+    """
+    lp = os.path.join(ROOT, 'data', 'lineups.csv')
+    if not os.path.exists(lp):
+        m['core_h'] = m['core_a'] = m['rot_h'] = m['rot_a'] = np.nan
+        return m
+    L = pd.read_csv(lp).set_index('game_id')
+
+    def xi(gid, side):
+        if gid not in L.index:
+            return None
+        v = L.at[gid, f'{side}_starters']
+        if not isinstance(v, str) or not v.strip():
+            return None
+        return set(v.split())
+
+    hist = {}
+    core_h, core_a, rot_h, rot_a = [], [], [], []
+    for _, r in m.iterrows():
+        for who, side, cl, rl in ((r.home, 'h', core_h, rot_h),
+                                  (r.away, 'a', core_a, rot_a)):
+            today = xi(r.game_id, side)
+            past = hist.get(who, [])
+            if today is None or len(past) < 3:
+                cl.append(np.nan); rl.append(np.nan)
+            else:
+                cnt = {}
+                for s in past[-10:]:
+                    for p in s:
+                        cnt[p] = cnt.get(p, 0) + 1
+                usual = {p for p, _ in sorted(cnt.items(), key=lambda x: -x[1])[:11]}
+                cl.append(len(usual & today) / 11.0)
+                recent = set().union(*past[-3:])
+                rl.append(len(today - recent) / max(len(today), 1))
+            if today is not None:
+                hist.setdefault(who, []).append(today)
+    m['core_h'], m['core_a'] = core_h, core_a
+    m['rot_h'], m['rot_a'] = rot_h, rot_a
+    m['core_diff'] = m.core_h - m.core_a
+    return m
+
+
 def in_ramadan(d):
     for a, b in RAMADAN:
         if a <= d <= b:
@@ -202,6 +257,9 @@ def build(refresh_weather=False):
     m['rest_min'] = m[['rest_h', 'rest_a']].min(axis=1)
     m['cong_sum'] = m.cong_h + m.cong_a           # симметричный: давит на обе команды
     m['cong_diff'] = m.cong_h - m.cong_a
+
+    # ---------- доступность состава ----------
+    m = add_lineup_factors(m)
 
     # ---------- переезды ----------
     def dist(row):
@@ -244,6 +302,7 @@ def build(refresh_weather=False):
             'kickoff_hour', 'weekday', 'evening', 'month', 'ramadan',
             'rest_h', 'rest_a', 'rest_diff', 'rest_min',
             'cong_h', 'cong_a', 'cong_sum', 'cong_diff', 'travel_a',
+            'core_h', 'core_a', 'core_diff', 'rot_h', 'rot_a',
             'temp', 'rh', 'heat']
     out = m[cols]
     out.to_csv(OUT, index=False)
@@ -251,7 +310,8 @@ def build(refresh_weather=False):
     p = out[out.played.fillna(False)]
     print()
     print('заполненность на сыгранных (%d):' % len(p))
-    for c in ('rest_diff', 'cong_sum', 'travel_a', 'temp', 'heat', 'ramadan'):
+    for c in ('rest_diff', 'cong_sum', 'travel_a', 'temp', 'heat', 'ramadan',
+              'core_h', 'core_diff', 'rot_h'):
         print('  %-11s %3d  среднее %7.2f  разброс %6.2f  от %6.2f до %6.2f'
               % (c, p[c].notna().sum(), p[c].mean(), p[c].std(),
                  p[c].min(), p[c].max()))

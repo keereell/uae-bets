@@ -40,6 +40,9 @@ HYPOTHESES = {
     'rest':        dict(team=[('rest_h', 'rest_a')],  why='отдых перед матчем'),
     'congestion':  dict(team=[('cong_h', 'cong_a')],  why='матчей за 21 день'),
     'travel':      dict(team=[('travel_h', 'travel_a')], why='переезд гостей'),
+    'core':        dict(team=[('core_h', 'core_a')],  why='доля обычной одиннадцатки в составе'),
+    'rotation':    dict(team=[('rot_h', 'rot_a')],    why='ротация: новые лица в старте'),
+    'core_rest':   dict(team=[('core_h', 'core_a'), ('rest_h', 'rest_a')], why='состав + отдых'),
     'heat_rest':   dict(sym=['heat'], team=[('rest_h', 'rest_a')], why='жара + отдых вместе'),
 }
 
@@ -57,7 +60,7 @@ def load():
     for c in ('travel_h', 'travel_a'):
         d[c] = d[c] / 100.0                  # на +100 км
     for c in ('rest_h', 'rest_a', 'cong_h', 'cong_a', 'heat', 'temp',
-              'evening', 'ramadan'):
+              'evening', 'ramadan', 'core_h', 'core_a', 'rot_h', 'rot_a'):
         if c in d:
             d[c] = d[c].fillna(d[c].median())
     return d
