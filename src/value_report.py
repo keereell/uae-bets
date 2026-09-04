@@ -17,7 +17,7 @@
 
     python src/value_report.py
 """
-import sys, os
+import sys, os, time
 import numpy as np
 import pandas as pd
 
@@ -140,6 +140,28 @@ def main():
 
     # ---------- ПРОХОД 1: калибровка тура
     pages = load_all()
+
+    # ОТСЕЧЬ СТАРТОВАВШИЕ. Список матчей приходит из ленты БЕТСИТИ, а она
+    # какое-то время держит уже начавшиеся и даже сыгранные встречи.
+    # 4 сентября 2026 отчёт спокойно посчитал Калбу — Аль-Айн (0:2) и
+    # Аль-Васл — Хаур-Факкан (5:2) как предстоящие, с живой линией.
+    # Ставку по ним предложить не успело только потому, что там не было
+    # яруса 1. Сверяемся с расписанием, а не с доверием к ленте.
+    now = time.time()
+    fresh, dropped = [], []
+    for head, brows in pages:
+        h, a = to_en(head.get('home')), to_en(head.get('away'))
+        row = df[(df.home == h) & (df.away == a)].sort_values('ts')
+        row = row[row.ts >= now - 3 * 86400]
+        started = row.empty or bool(row.iloc[0].played) or float(row.iloc[0].ts) <= now
+        (dropped if started else fresh).append((head, brows))
+    if dropped:
+        print(f'Пропущено (матч уже начался или сыгран): '
+              f'{", ".join(str(x[0].get("home")) + " — " + str(x[0].get("away")) for x in dropped)}')
+    pages = fresh
+    if not pages:
+        print('\nНи одного предстоящего матча с линией.')
+        return
     ml_pairs, mk_pairs, implied_cache = [], [], {}
     for head, brows in pages:
         h, a = to_en(head.get('home')), to_en(head.get('away'))
