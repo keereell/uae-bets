@@ -14,6 +14,7 @@
       .dops-item-row__block-left      — название исхода
       .dops-item-row__block-right     — коэффициент
 """
+import time
 import email, os, re, glob
 from bs4 import BeautifulSoup
 
@@ -168,17 +169,37 @@ def _from_api():
     return out
 
 
-def load_all(folder=None, api_fallback=True):
-    """Сохранённые страницы, а если их нет — линия через API."""
+FRESH_HOURS = 6.0
+
+
+def load_all(folder=None, api_fallback=True, fresh_hours=FRESH_HOURS):
+    """
+    Свежие сохранённые страницы, а если их нет — линия через API.
+
+    Сохранённая страница несёт ~340 рынков против 10 у API, поэтому она
+    в приоритете. Но ТОЛЬКО свежая. Раньше любой файл в Bets/ молча
+    перекрывал живую линию: 4 сентября 2026 все локальные расчёты весь день
+    шли по страницам от 1 сентября (Шабаб П1 2.27 при живых 2.10), и два
+    новых матча тура в них просто не существовали. CI тем временем ходил
+    в API и видел правду. Расхождение вскрылось случайно.
+    """
     folder = folder or os.path.join(ROOT, 'Bets')
-    out = []
+    now = time.time()
+    out, stale = [], []
     for p in sorted(glob.glob(os.path.join(folder, '*.mhtml'))):
+        age_h = (now - os.path.getmtime(p)) / 3600.0
+        if age_h > fresh_hours:
+            stale.append((os.path.basename(p), age_h))
+            continue
         head, rows = parse_page(p)
         out.append((head, rows))
+    if stale:
+        print(f'[линия] отброшено устаревших страниц: {len(stale)} (старше {fresh_hours:g} ч): '
+              + ', '.join(f'{n} ({a/24:.1f} дн)' for n, a in stale[:6]))
     if not out and api_fallback:
         try:
             out = _from_api()
-            print(f'[линия] сохранённых страниц нет, взял через API: {len(out)} матчей')
+            print(f'[линия] свежих страниц нет, взял через API: {len(out)} матчей')
         except Exception as e:
             print(f'[линия] API недоступен: {e}')
     return out
