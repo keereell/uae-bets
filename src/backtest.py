@@ -54,7 +54,10 @@ def walk_forward(df, params, start_date='2025-02-01', end_date=None, min_train=1
         for _, r in test.iterrows():
             if r.home not in m.idx or r.away not in m.idx:
                 continue
-            M, lh, la = m.matrix(r.home, r.away)
+            # cov=r: строка матча целиком. Модель возьмёт из неё только
+            # те колонки, что перечислены в covariates/covariates_team;
+            # без ковариат аргумент игнорируется.
+            M, lh, la = m.matrix(r.home, r.away, cov=r)
             p = wdl(M)
             out = 0 if r.hg > r.ag else (1 if r.hg == r.ag else 2)
             pm = np.array([p['H'], p['D'], p['A']])

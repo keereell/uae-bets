@@ -57,13 +57,23 @@ def detect_newcomers(df):
 class DixonColes:
     def __init__(self, half_life=180.0, alpha=1.5, w_goals=0.35,
                  xg_scale=None, promoted_shift=0.25, covariates=(),
-                 xg_cols=('h_xg', 'a_xg'), dispersion=None):
+                 xg_cols=('h_xg', 'a_xg'), dispersion=None,
+                 covariates_team=(), cov_ridge=5.0):
         self.half_life = half_life        # период полураспада веса матча, дней
         self.alpha = alpha                # сила L2-сжатия к априору
         self.w_goals = w_goals            # доля голов в целевой переменной (остальное xG)
         self.xg_scale = xg_scale          # перекалибровка xG (None -> оценить по данным)
         self.promoted_shift = promoted_shift
         self.covariates = list(covariates)
+        # КОМАНДНЫЕ ковариаты: пары (колонка хозяев, колонка гостей) с ОБЩИМ
+        # коэффициентом. Обычные covariates прибавляются к обеим интенсивностям
+        # одинаково и потому умеют двигать только тотал -- ими нельзя выразить
+        # ни отдых, ни переезд, ни отсутствие игрока, потому что это состояние
+        # ОДНОЙ команды. Здесь каждая команда получает поправку по своему
+        # значению признака, а коэффициент общий: «лишний день отдыха стоит
+        # столько-то голов» -- одно число для хозяев и гостей.
+        self.covariates_team = [tuple(x) for x in covariates_team]
+        self.cov_ridge = cov_ridge
         self.xg_cols = tuple(xg_cols)
         # Пуассоновское ядро предполагает Var = lambda. Для xG это неверно:
         # измеренная дисперсия Пирсона около 0.47, то есть xG вдвое менее шумный,
@@ -72,7 +82,7 @@ class DixonColes:
         # dispersion=None -> оценить по данным (две итерации).
         self.dispersion = dispersion
         self.rho = 0.0
-        self.beta = np.zeros(len(self.covariates))
+        self.beta = np.zeros(len(self.covariates) + len(self.covariates_team))
 
     # -------------------------------------------------- целевая переменная
     def _target(self, d):
@@ -162,26 +172,43 @@ class DixonColes:
         base_a = self.atk[ai] - self.dfn[hi]
         gh = d.hg.values.astype(float)
         ga = d.ag.values.astype(float)
+        def col(name):
+            v = d[name].astype(float)
+            return v.fillna(v.median()).values
+
+        # Симметричные признаки матча: жара, Рамадан, время начала -- одинаково
+        # действуют на обе команды, поэтому двигают тотал.
         if self.covariates:
-            X = np.column_stack([d[c].astype(float).fillna(d[c].astype(float).median()).values
-                                 for c in self.covariates])
-            self._cov_mean = X.mean(axis=0)
-            Xc = X - self._cov_mean
+            Xs = np.column_stack([col(c) for c in self.covariates])
         else:
-            X = np.zeros((len(d), 0))
-            self._cov_mean = np.zeros(0)
-            Xc = X
-        k = X.shape[1]
+            Xs = np.zeros((len(d), 0))
+        # Командные признаки: у хозяев своё значение, у гостей своё.
+        if self.covariates_team:
+            Th = np.column_stack([col(a) for a, _ in self.covariates_team])
+            Ta = np.column_stack([col(b) for _, b in self.covariates_team])
+        else:
+            Th = Ta = np.zeros((len(d), 0))
+
+        # Центрируем по общему среднему пары, иначе коэффициент смешался бы
+        # с уровнем mu, а у хозяев и гостей центр обязан быть одним и тем же.
+        self._cov_mean = Xs.mean(axis=0) if Xs.shape[1] else np.zeros(0)
+        self._covt_mean = (np.concatenate([Th, Ta]).mean(axis=0)
+                           if Th.shape[1] else np.zeros(0))
+        Xsc = Xs - self._cov_mean
+        Thc, Tac = Th - self._covt_mean, Ta - self._covt_mean
+        ks, kt = Xs.shape[1], Th.shape[1]
+        k = ks + kt
 
         def nll2(th):
             mu, gam, beta = th[0], th[1], th[2:]
-            adj = Xc @ beta if k else 0.0
-            eh = mu + gam + base_h + adj
-            ea = mu + base_a + adj
+            bs, bt = beta[:ks], beta[ks:]
+            sym = Xsc @ bs if ks else 0.0
+            eh = mu + gam + base_h + sym + (Thc @ bt if kt else 0.0)
+            ea = mu + base_a + sym + (Tac @ bt if kt else 0.0)
             lh = np.exp(np.clip(eh, -6, 3))
             la = np.exp(np.clip(ea, -6, 3))
             return (np.sum(w * (lh - gh * eh)) + np.sum(w * (la - ga * ea))
-                    + 5.0 * float(np.sum(beta ** 2)))
+                    + self.cov_ridge * float(np.sum(beta ** 2)))
 
         r2 = minimize(nll2, np.concatenate([[r1.x[0], r1.x[1]], np.zeros(k)]),
                       method='L-BFGS-B', options=dict(maxiter=600))
@@ -198,7 +225,10 @@ class DixonColes:
         return self
 
     def _fit_rho(self, d, hi, ai, w, Xc):
-        adj = Xc @ self.beta if len(self.beta) else 0.0
+        # только симметричная часть: rho оценивается на сетке уже после beta,
+        # и командные поправки сюда не передаются
+        bs = self.beta[:Xc.shape[1]] if Xc.shape[1] else self.beta[:0]
+        adj = Xc @ bs if Xc.shape[1] else 0.0
         lh = np.exp(self.mu + self.gamma + self.atk[hi] - self.dfn[ai] + adj)
         la = np.exp(self.mu + self.atk[ai] - self.dfn[hi] + adj)
         hg = d.hg.values.astype(int)
@@ -227,12 +257,19 @@ class DixonColes:
         i, j = self.idx.get(home), self.idx.get(away)
         if i is None or j is None:
             raise KeyError('нет в модели: ' + str(home if i is None else away))
-        adj = 0.0
+        ks = len(self.covariates)
+        adj_h = adj_a = 0.0
         if self.covariates:
             v = np.array([cov[c] for c in self.covariates], float) - self._cov_mean
-            adj = float(v @ self.beta)
-        lh = np.exp(self.mu + self.gamma + self.atk[i] - self.dfn[j] + adj)
-        la = np.exp(self.mu + self.atk[j] - self.dfn[i] + adj)
+            adj_h = adj_a = float(v @ self.beta[:ks])
+        if self.covariates_team:
+            bt = self.beta[ks:]
+            vh = np.array([cov[a] for a, _ in self.covariates_team], float) - self._covt_mean
+            va = np.array([cov[b] for _, b in self.covariates_team], float) - self._covt_mean
+            adj_h += float(vh @ bt)
+            adj_a += float(va @ bt)
+        lh = np.exp(self.mu + self.gamma + self.atk[i] - self.dfn[j] + adj_h)
+        la = np.exp(self.mu + self.atk[j] - self.dfn[i] + adj_a)
         return float(lh), float(la)
 
     def matrix(self, home, away, cov=None):

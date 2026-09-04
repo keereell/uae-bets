@@ -1,100 +1,262 @@
 # -*- coding: utf-8 -*-
 """
-Проверка контекстных факторов: даёт ли фактор информацию СВЕРХ силы команд
-и преимущества поля?
+ПРИЗНАКИ МАТЧА, которых нет в сырых данных.
 
-Метод: берём остатки walk-forward прогноза (реальные голы минус ожидаемые
-по модели) и регрессируем их на фактор. Если коэффициент значим — фактор
-несёт информацию, которой в модели нет. Так проверяются:
-  * время начала матча (жара: 17:45 против 20:15)
-  * месяц (август-сентябрь -- пик жары в ОАЭ)
-  * дни отдыха и разница в отдыхе между командами
-  * номер тура (начало сезона -- «сыгранность»)
-  * день недели
-Дополнительно — тест на преимущество поля в голах против xG.
+Рейтинги атаки и обороны, подогнанные на xG, уже вобрали в себя всё, что
+постоянно для команды: бюджет, качество состава, стиль. Смысл имеют только
+величины, которые МЕНЯЮТСЯ ОТ МАТЧА К МАТЧУ внутри одной команды и сезона.
+Здесь собраны ровно такие.
+
+    python src/factors.py            # построить и сохранить data/factors.csv
+    python src/factors.py --weather  # заодно догрузить погоду (13 запросов)
+
+Погода берётся из архива Open-Meteo: бесплатно, без ключа, почасовая
+температура и влажность по координатам стадиона. Один запрос на город
+на весь диапазон дат, результат кэшируется в data/weather.csv.
 """
-import sys, os
+import os, sys, json, time, urllib.request, urllib.parse
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from backtest import walk_forward
-from predict import best_params
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-pd.set_option('display.width', 220)
+MATCHES = os.path.join(ROOT, 'data', 'matches.csv')
+# 245 тысяч строк почасовых наблюдений: в сыром виде 8.5 МБ, в gzip 1.3 МБ
+WEATHER = os.path.join(ROOT, 'data', 'weather.csv.gz')
+OUT = os.path.join(ROOT, 'data', 'factors.csv')
+
+# Координаты домашних городов. ОАЭ компактны: от Мадинат-Зайда до Диббы
+# около 300 км по прямой, поэтому эффект перелётов заранее сомнителен --
+# но проверить дешевле, чем спорить.
+CITY = {
+    'Al Ain':            (24.2075, 55.7447, 'Al Ain'),
+    'Al Wasl':           (25.2048, 55.2708, 'Dubai'),
+    'Al Nasr Dubai':     (25.2048, 55.2708, 'Dubai'),
+    'Shabab Al Ahly':    (25.2048, 55.2708, 'Dubai'),
+    'Dubai United':      (25.2048, 55.2708, 'Dubai'),
+    'Al-Wahda':          (24.4539, 54.3773, 'Abu Dhabi'),
+    'Jazira Abu Dhabi':  (24.4539, 54.3773, 'Abu Dhabi'),
+    'Baniyas':           (24.3050, 54.6300, 'Baniyas'),
+    'Al Dhafra':         (23.6500, 53.7000, 'Madinat Zayed'),
+    'Sharjah SC':        (25.3463, 55.4209, 'Sharjah'),
+    'Al Bataeh':         (25.2500, 55.7500, 'Al Bataeh'),
+    'Ajman Club':        (25.4052, 55.5136, 'Ajman'),
+    'Kalba':             (25.0500, 56.3500, 'Kalba'),
+    'Khor Fakkan':       (25.3392, 56.3420, 'Khor Fakkan'),
+    'Dibba Al Fujairah': (25.5942, 56.2694, 'Dibba'),
+    'Dubba Al Husun':    (25.6197, 56.2739, 'Dibba Al-Hisn'),
+    'Al Urooba':         (25.1288, 56.3265, 'Fujairah'),
+    'Hatta Club':        (24.8000, 56.1167, 'Hatta'),
+}
+
+# Рамадан по григорианскому календарю. Даты сдвигаются примерно на 11 дней
+# в год, поэтому таблица, а не формула.
+RAMADAN = [
+    ('2024-03-11', '2024-04-09'),
+    ('2025-03-01', '2025-03-29'),
+    ('2026-02-17', '2026-03-19'),
+    ('2027-02-07', '2027-03-08'),
+]
+
+ARCHIVE = ('https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}'
+           '&start_date={d0}&end_date={d1}'
+           '&hourly=temperature_2m,relative_humidity_2m&timezone=Asia%2FDubai')
+# Архив отстаёт от сегодняшнего дня на несколько суток и на будущие даты
+# отвечает 400. Ближайшие матчи закрываются прогнозом.
+FORECAST = ('https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}'
+            '&hourly=temperature_2m,relative_humidity_2m&timezone=Asia%2FDubai'
+            '&past_days=7&forecast_days=16')
 
 
-def ols(y, X, names):
-    """МНК с robust-стандартными ошибками (HC0)."""
-    X = np.column_stack([np.ones(len(y)), X])
-    names = ['const'] + list(names)
-    XtX_inv = np.linalg.pinv(X.T @ X)
-    b = XtX_inv @ X.T @ y
-    r = y - X @ b
-    S = (X * (r ** 2)[:, None]).T @ X
-    V = XtX_inv @ S @ XtX_inv
-    se = np.sqrt(np.diag(V))
-    t = b / np.where(se > 0, se, np.nan)
-    return pd.DataFrame(dict(фактор=names, коэф=b, ст_ошибка=se, t=t)).round(4)
+def haversine(a, b):
+    """Расстояние между двумя точками по большому кругу, км."""
+    R = 6371.0
+    p1, p2 = np.radians(a[0]), np.radians(b[0])
+    dp = p2 - p1
+    dl = np.radians(b[1] - a[1])
+    h = np.sin(dp / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(dl / 2) ** 2
+    return float(2 * R * np.arcsin(np.sqrt(h)))
 
 
-def main():
-    df = pd.read_csv(os.path.join(ROOT, 'data', 'matches.csv'))
-    wf = walk_forward(df, best_params())
-    d = wf.merge(df[['date', 'home', 'away', 'kickoff_hour', 'weekday', 'round',
-                     'season', 'h_rest', 'a_rest', 'h_xg', 'a_xg']],
-                 on=['date', 'home', 'away'], how='left', suffixes=('', '_y'))
-    d = d.dropna(subset=['kickoff_hour'])
-    print(f'матчей в анализе: {len(d)}')
+def _grab(url, city, rows, tries=4):
+    """Два года почасовых данных -- ответ на 2 МБ, обрывы соединения обычны."""
+    for k in range(tries):
+        try:
+            with urllib.request.urlopen(url, timeout=120) as r:
+                j = json.loads(r.read().decode('utf-8'))
+        except Exception as e:
+            if k == tries - 1:
+                print(f'  {city}: не удалось после {tries} попыток: {e}', file=sys.stderr)
+                return 0
+            time.sleep(2.0 * (k + 1))
+            continue
+        h = j.get('hourly') or {}
+        for t, temp, rh in zip(h.get('time', []), h.get('temperature_2m', []),
+                               h.get('relative_humidity_2m', [])):
+            rows.append(dict(city=city, dt=t, temp=temp, rh=rh))
+        return len(h.get('time', []))
+    return 0
 
-    # остатки: сколько голов забито сверх ожидания модели
-    d['res_total'] = (d.hg + d.ag) - (d.lh + d.la)
-    d['res_diff'] = (d.hg - d.ag) - (d.lh - d.la)
-    d['вечер'] = (d.kickoff_hour >= 19.5).astype(float)
-    d['жаркий_месяц'] = pd.to_datetime(d.date).dt.month.isin([8, 9, 10, 5]).astype(float)
-    d['rest_diff'] = (d.h_rest - d.a_rest).fillna(0).clip(-10, 10)
-    d['h_rest_c'] = d.h_rest.fillna(d.h_rest.median()).clip(2, 20)
-    d['начало_сезона'] = (d['round'] <= 4).astype(float)
 
-    print('\n=== ВЛИЯНИЕ НА ОБЩУЮ РЕЗУЛЬТАТИВНОСТЬ (остаток «голы минус ожидание») ===')
-    cols = ['вечер', 'жаркий_месяц', 'начало_сезона', 'h_rest_c']
-    print(ols(d.res_total.values, d[cols].values, cols).to_string(index=False))
+def fetch_weather(d0, d1, only=None):
+    """
+    Почасовая погода по каждому городу. Архив закрывает прошлое, прогноз --
+    последнюю неделю и ближайшие две. Один запрос на город, не на матч.
+    """
+    seen, rows = {}, []
+    for team, (lat, lon, city) in CITY.items():
+        if city in seen or (only is not None and city not in only):
+            continue
+        seen[city] = True
+        n = _grab(ARCHIVE.format(lat=lat, lon=lon, d0=d0, d1=d1), city, rows)
+        n += _grab(FORECAST.format(lat=lat, lon=lon), city, rows)
+        print(f'  {city}: {n} часов')
+        time.sleep(0.3)
+    if not rows:
+        return pd.DataFrame(rows)
+    return pd.DataFrame(rows).drop_duplicates(subset=['city', 'dt'], keep='last')
 
-    print('\n=== ВЛИЯНИЕ НА ПЕРЕВЕС ХОЗЯЕВ (остаток разницы мячей) ===')
-    cols2 = ['вечер', 'rest_diff', 'начало_сезона']
-    print(ols(d.res_diff.values, d[cols2].values, cols2).to_string(index=False))
 
-    print('\n=== ПРЕИМУЩЕСТВО ПОЛЯ: ГОЛЫ ПРОТИВ xG ===')
-    p = df[df.played].dropna(subset=['h_xg', 'a_xg'])
-    gd = (p.hg - p.ag).values
-    xd = (p.h_xg - p.a_xg).values * 1.2139
-    for nm, v in (('по голам', gd), ('по xG (в шкале голов)', xd)):
-        se = v.std(ddof=1) / np.sqrt(len(v))
-        print(f'  {nm:24s}: {v.mean():+.3f} ± {1.96*se:.3f} (95% ДИ)  N={len(v)}')
-    diff = gd - xd
-    se = diff.std(ddof=1) / np.sqrt(len(diff))
-    print(f'  разница (голы - xG)     : {diff.mean():+.3f} ± {1.96*se:.3f}  '
-          f'-> t = {diff.mean()/se:.2f}')
+def load_weather(dates, refresh=False):
+    """
+    Догружает только недостающие города, а не всё заново: два года почасовых
+    данных на город -- это мегабайты, и половина запросов обрывается.
+    """
+    have = pd.read_csv(WEATHER) if os.path.exists(WEATHER) else pd.DataFrame()
+    want = {c for _, _, c in CITY.values()}
+    # Архив обрывается за несколько суток до сегодня; на более поздние даты
+    # он отвечает 400 и роняет весь запрос. Хвост добирает прогноз.
+    cutoff = (pd.Timestamp.now('UTC').normalize() - pd.Timedelta(days=6)).strftime('%Y-%m-%d')
+    d0, d1 = min(dates), min(max(dates), cutoff)
+    if not refresh and not have.empty:
+        return have
+    # Городом считаем догруженным, только если у него есть архивная глубина,
+    # а не одни лишь 550 часов прогноза.
+    deep = set(have.groupby('city').size()[lambda s: s > 5000].index) if not have.empty else set()
+    todo = sorted(want - deep)
+    if not todo:
+        return have
+    print(f'гружу погоду: архив {d0}..{d1} + прогноз; городов осталось {len(todo)}')
+    w = fetch_weather(d0, d1, only=set(todo))
+    out = pd.concat([have, w], ignore_index=True) if not have.empty else w
+    if not out.empty:
+        out = out.drop_duplicates(subset=['city', 'dt'], keep='last')
+        out['temp'] = out.temp.round(1)
+        out['rh'] = out.rh.round(0)
+        out.to_csv(WEATHER, index=False, compression='gzip')
+    return out
 
-    print('\n=== ВРЕМЯ НАЧАЛА: СЫРЫЕ СРЕДНИЕ (без поправки на силу команд) ===')
-    p2 = df[df.played].copy()
-    p2['слот'] = np.where(p2.kickoff_hour < 19.0, 'ранний (17:00-18:30)', 'поздний (19:30+)')
-    g = p2.groupby('слот').apply(lambda x: pd.Series({
-        'матчей': len(x),
-        'голов': (x.hg + x.ag).mean(),
-        'xG': (x.h_xg + x.a_xg).mean() * 1.2139,
-        'победы хозяев': (x.hg > x.ag).mean(),
-        'ничьи': (x.hg == x.ag).mean()}), include_groups=False)
-    print(g.round(3).to_string())
-    a = p2[p2.kickoff_hour < 19.0]
-    b = p2[p2.kickoff_hour >= 19.0]
-    ta = (a.hg + a.ag).values
-    tb = (b.hg + b.ag).values
-    se = np.sqrt(ta.var(ddof=1) / len(ta) + tb.var(ddof=1) / len(tb))
-    print(f'\n  разница в тотале ранний-поздний: {ta.mean()-tb.mean():+.3f} ± {1.96*se:.3f} '
-          f'-> t = {(ta.mean()-tb.mean())/se:.2f}  (|t|>2 = значимо)')
+
+def heat_index(t, rh):
+    """
+    Простой индекс жары (ощущаемая температура, °C). Формула Ротфуса
+    в метрическом виде; ниже 27 °C влажность роли не играет.
+    Именно связка «жарко + влажно» ограничивает работоспособность,
+    а не температура сама по себе -- в ОАЭ влажность на побережье
+    доходит до 90% при 30 °C, что тяжелее, чем сухие 38 °C в Аль-Айне.
+    """
+    t = np.asarray(t, float)
+    rh = np.asarray(rh, float)
+    hi = (-8.784695 + 1.61139411 * t + 2.338549 * rh - 0.14611605 * t * rh
+          - 0.012308094 * t ** 2 - 0.016424828 * rh ** 2
+          + 0.002211732 * t ** 2 * rh + 0.00072546 * t * rh ** 2
+          - 0.000003582 * t ** 2 * rh ** 2)
+    return np.where(t < 27.0, t, hi)
+
+
+def in_ramadan(d):
+    for a, b in RAMADAN:
+        if a <= d <= b:
+            return True
+    return False
+
+
+def build(refresh_weather=False):
+    m = pd.read_csv(MATCHES)
+    m = m.sort_values('ts').reset_index(drop=True)
+    dates = sorted(m.date.astype(str).unique())
+
+    # ---------- отдых и плотность календаря ----------
+    # h_rest/a_rest в matches.csv уже есть, но их нет для первого матча
+    # сезона и они не различают «отдыхал» и «не играл вообще».
+    last = {}
+    hist = {}
+    rest_h, rest_a, cong_h, cong_a = [], [], [], []
+    for _, r in m.iterrows():
+        t = float(r.ts)
+        for who, lst_r, lst_c in ((r.home, rest_h, cong_h), (r.away, rest_a, cong_a)):
+            prev = last.get(who)
+            lst_r.append(np.nan if prev is None else (t - prev) / 86400.0)
+            past = hist.get(who, [])
+            lst_c.append(sum(1 for x in past if 0 < (t - x) <= 21 * 86400))
+        for who in (r.home, r.away):
+            last[who] = t
+            hist.setdefault(who, []).append(t)
+    m['rest_h'], m['rest_a'] = rest_h, rest_a
+    m['cong_h'], m['cong_a'] = cong_h, cong_a
+
+    # Межсезонье -- это не отдых, а другое состояние. Больше 30 дней
+    # обрезаем: разница между 40 и 90 днями простоя бессмысленна.
+    for c in ('rest_h', 'rest_a'):
+        m[c] = m[c].clip(upper=30.0)
+    m['rest_diff'] = m.rest_h - m.rest_a          # асимметричный: + в пользу хозяев
+    m['rest_min'] = m[['rest_h', 'rest_a']].min(axis=1)
+    m['cong_sum'] = m.cong_h + m.cong_a           # симметричный: давит на обе команды
+    m['cong_diff'] = m.cong_h - m.cong_a
+
+    # ---------- переезды ----------
+    def dist(row):
+        a = CITY.get(row.home)
+        b = CITY.get(row.away)
+        if not a or not b:
+            return np.nan
+        return haversine(a[:2], b[:2])
+    m['travel_a'] = m.apply(dist, axis=1)         # хозяева не едут никуда
+
+    # ---------- время начала и календарь ----------
+    m['evening'] = (m.kickoff_hour >= 19.0).astype(float)
+    dd = pd.to_datetime(m.date)
+    m['month'] = dd.dt.month
+    m['ramadan'] = m.date.astype(str).map(in_ramadan).astype(float)
+
+    # ---------- погода на момент начала ----------
+    w = load_weather(dates, refresh=refresh_weather)
+    if not w.empty:
+        w['dt'] = pd.to_datetime(w.dt)
+        w['date'] = w.dt.dt.strftime('%Y-%m-%d')
+        w['hour'] = w.dt.dt.hour
+        key = w.set_index(['city', 'date', 'hour'])[['temp', 'rh']]
+        temps, rhs = [], []
+        for _, r in m.iterrows():
+            c = CITY.get(r.home)
+            k = (c[2], str(r.date), int(round(float(r.kickoff_hour)))) if c else None
+            if k is not None and k in key.index:
+                v = key.loc[k]
+                temps.append(float(v.temp)); rhs.append(float(v.rh))
+            else:
+                temps.append(np.nan); rhs.append(np.nan)
+        m['temp'] = temps
+        m['rh'] = rhs
+        m['heat'] = heat_index(m.temp, m.rh)
+    else:
+        m['temp'] = m['rh'] = m['heat'] = np.nan
+
+    cols = ['game_id', 'season', 'round', 'date', 'ts', 'home', 'away', 'played',
+            'kickoff_hour', 'weekday', 'evening', 'month', 'ramadan',
+            'rest_h', 'rest_a', 'rest_diff', 'rest_min',
+            'cong_h', 'cong_a', 'cong_sum', 'cong_diff', 'travel_a',
+            'temp', 'rh', 'heat']
+    out = m[cols]
+    out.to_csv(OUT, index=False)
+    print(f'сохранено: {OUT}  строк {len(out)}')
+    p = out[out.played.fillna(False)]
+    print()
+    print('заполненность на сыгранных (%d):' % len(p))
+    for c in ('rest_diff', 'cong_sum', 'travel_a', 'temp', 'heat', 'ramadan'):
+        print('  %-11s %3d  среднее %7.2f  разброс %6.2f  от %6.2f до %6.2f'
+              % (c, p[c].notna().sum(), p[c].mean(), p[c].std(),
+                 p[c].min(), p[c].max()))
+    return out
 
 
 if __name__ == '__main__':
-    main()
+    build(refresh_weather='--weather' in sys.argv)
