@@ -153,6 +153,11 @@
    }
   },
   "pinnacle": {
+   "Al Ain — Al Wasl": {
+    "home": 1.6666666666666665,
+    "away": 4.26,
+    "draw": 4.220000000000001
+   },
    "Al-Nasr Dubai — Ajman": {
     "home": 1.970873786407767,
     "away": 3.53,
@@ -163,17 +168,12 @@
     "away": 1.5847953216374269,
     "draw": 4.640000000000001
    },
-   "Al Ain — Al Wasl": {
-    "home": 1.6666666666666665,
-    "away": 4.26,
-    "draw": 4.220000000000001
-   },
    "Khor Fakkan Club — Bani Yas": {
     "home": 2.51,
     "away": 2.51,
     "draw": 3.74
    }
   },
-  "checked_at": "2026-09-05T19:51Z"
+  "checked_at": "2026-09-05T21:52Z"
  }
 }
