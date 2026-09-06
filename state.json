@@ -180,10 +180,10 @@
    }
   },
   "pinnacle": {
-   "Khor Fakkan Club — Bani Yas": {
-    "home": 2.51,
-    "away": 2.51,
-    "draw": 3.74
+   "Al Wahda — Sharjah FC": {
+    "home": 2.46,
+    "away": 2.77,
+    "draw": 3.34
    },
    "Al Ain — Al Wasl": {
     "home": 1.6666666666666665,
@@ -195,17 +195,17 @@
     "away": 3.5,
     "draw": 3.66
    },
-   "Al Wahda — Sharjah FC": {
-    "home": 2.46,
-    "away": 2.77,
-    "draw": 3.34
-   },
    "Al Jazira — Al-Nasr Dubai": {
     "home": 1.5208333333333335,
     "away": 5.11,
     "draw": 4.52
+   },
+   "Khor Fakkan Club — Bani Yas": {
+    "home": 2.51,
+    "away": 2.51,
+    "draw": 3.74
    }
   },
-  "checked_at": "2026-09-06T19:56Z"
+  "checked_at": "2026-09-06T21:55Z"
  }
 }
