@@ -44,6 +44,17 @@ SNAPSHOTS = os.path.join(ROOT, 'data', 'odds_snapshots.jsonl.gz')
 DEVIG3 = 'shin'      # трёхсторонние рынки: Штрумбель (2014) на 37 турнирах
 DEVIG2 = 'power'     # двусторонние: степенной и мультипликативный почти совпадают
 
+# Все методы снятия маржи, по которым проверяется устойчивость находки.
+# Расхождение между ними -- измеренная неопределённость, а не вкусовщина:
+# на живой линии оно переворачивало знак у 21 находки из 21.
+METHODS = ('mult', 'add', 'power', 'shin', 'oddsratio')
+
+# Практический пол по коэффициенту. Ниже 1.20 ставка требует огромной суммы
+# ради копеечной отдачи, конторы такие ставки режут лимитами, а цена округлена
+# так грубо, что один шаг котировки (1.04 -> 1.05) сдвигает матожидание
+# на процент. Прежняя версия отбора держала здесь 1.35 по той же причине.
+ODDS_FLOOR = 1.20
+
 # Минимальное число контор, чтобы консенсусу вообще можно было верить.
 # При двух-трёх конторах медиана -- это не консенсус, а шум.
 MIN_BOOKS = 5
@@ -78,66 +89,112 @@ def _parse_sel(sel):
     return (None, None, None)
 
 
-def devig_one_book(quotes):
+# Минимальная сумма обратных цен, при которой рынок считается ЗАМКНУТЫМ.
+# Букмекер всегда закладывает маржу, поэтому у полного набора исходов сумма
+# строго больше единицы. Сумма МЕНЬШЕ единицы означает ровно одно: часть
+# исходов мы не видим, набор неполный.
+#
+# Это не теория. Именно так вскрылась дыра на европейской форе: у Marathon
+# по матчу Аль-Айн — Аль-Васл пары EH давали суммы 0.876 / 0.930 / 0.988,
+# тогда как азиатские форы того же матча -- ровно 1.095. Причина: европейская
+# фора ТРЁХСТОРОННЯЯ (победа с форой / НИЧЬЯ с форой / поражение), а мы
+# нормировали две цены на единицу. Вероятности раздувались на 14%, и движок
+# рисовал перевес +40% на 13 исходах подряд. Порог 1.005 ловит весь этот
+# класс ошибок разом, для любого семейства рынков, а не только для EH.
+MIN_OVERROUND = 1.005
+
+
+def _closed(prices):
+    """Замкнут ли набор исходов: сумма обратных цен выше единицы с запасом."""
+    try:
+        return sum(1.0 / float(p) for p in prices) >= MIN_OVERROUND
+    except (TypeError, ZeroDivisionError, ValueError):
+        return False
+
+
+def devig_one_book(quotes, m3=None, m2=None):
     """
     Котировки ОДНОЙ конторы на ОДИН матч -> {sel: справедливая вероятность}.
 
     Снимать маржу можно только с ЗАМКНУТОГО рынка, где исходы образуют полную
-    группу: 1X2 целиком, пара тотала на одной линии, пара форы на зеркальных
-    линиях. Одиночная цена без пары непригодна -- из неё нельзя вычесть маржу,
-    и попытка это сделать даёт систематическую ошибку в свою пользу.
+    группу: 1X2 целиком, пара тотала на одной линии, пара азиатской форы на
+    зеркальных линиях. Одиночная цена без пары непригодна -- из неё нельзя
+    вычесть маржу, и попытка это сделать даёт систематическую ошибку
+    в свою пользу.
+
+    Европейская фора (EH) НЕ обрабатывается сознательно: у неё три исхода,
+    а ничью с форой конторы отдают не всегда и под разными ключами. Пока
+    третья нога не приходит от адаптеров, честнее не иметь по ней эталона
+    вовсе, чем иметь завышенный.
     """
+    m3 = m3 or DEVIG3
+    m2 = m2 or DEVIG2
     by = {q.sel: q.price for q in quotes}
     out = {}
 
     if all(k in by for k in ('1', 'X', '2')):
-        q = DEVIG[DEVIG3]([by['1'], by['X'], by['2']])
-        if not any(np.isnan(q)):
-            out['1'], out['X'], out['2'] = float(q[0]), float(q[1]), float(q[2])
+        prices = [by['1'], by['X'], by['2']]
+        if _closed(prices):
+            q = DEVIG[m3](prices)
+            if not any(np.isnan(q)):
+                out['1'], out['X'], out['2'] = float(q[0]), float(q[1]), float(q[2])
 
     tot = defaultdict(dict)
-    ah = defaultdict(dict)
     for sel, price in by.items():
         kind, line, side = _parse_sel(sel)
         if kind == 'total':
             tot[line][side] = price
-        elif kind in ('ah', 'eh'):
-            ah[(kind, abs(line) if side == 1 else abs(line))][side] = (price, line)
 
     for line, sides in tot.items():
-        if 'over' in sides and 'under' in sides:
-            q = DEVIG[DEVIG2]([sides['over'], sides['under']])
+        if 'over' in sides and 'under' in sides and _closed(sides.values()):
+            q = DEVIG[m2]([sides['over'], sides['under']])
             if not any(np.isnan(q)):
                 out[f'O{line:g}'] = float(q[0])
                 out[f'U{line:g}'] = float(q[1])
 
-    # Фора: 'AH1-0.5' замыкается с 'AH2+0.5'. Ключ группировки -- модуль линии.
+    # Азиатская фора: 'AH1-0.5' замыкается с 'AH2+0.5'. Группируем по модулю
+    # линии и требуем строгой зеркальности знаков.
     pairs = defaultdict(dict)
     for sel, price in by.items():
         kind, line, team = _parse_sel(sel)
-        if kind in ('ah', 'eh'):
-            pairs[(kind, abs(line))][team] = (price, line)
-    for (kind, _mag), sides in pairs.items():
-        if 1 in sides and 2 in sides:
-            (p1, l1), (p2, l2) = sides[1], sides[2]
-            if abs(l1 + l2) > 1e-9:          # линии обязаны быть зеркальными
-                continue
-            q = DEVIG[DEVIG2]([p1, p2])
-            if not any(np.isnan(q)):
-                pre = 'AH' if kind == 'ah' else 'EH'
-                out[f'{pre}1{"+" if l1 >= 0 else "-"}{abs(l1):g}'] = float(q[0])
-                out[f'{pre}2{"+" if l2 >= 0 else "-"}{abs(l2):g}'] = float(q[1])
+        if kind == 'ah':
+            pairs[abs(line)][team] = (price, line)
+    for _mag, sides in pairs.items():
+        if 1 not in sides or 2 not in sides:
+            continue
+        (p1, l1), (p2, l2) = sides[1], sides[2]
+        if abs(l1 + l2) > 1e-9:              # линии обязаны быть зеркальными
+            continue
+        if not _closed([p1, p2]):
+            continue
+        q = DEVIG[m2]([p1, p2])
+        if not any(np.isnan(q)):
+            out[f'AH1{"+" if l1 >= 0 else "-"}{abs(l1):g}'] = float(q[0])
+            out[f'AH2{"+" if l2 >= 0 else "-"}{abs(l2):g}'] = float(q[1])
     return out
 
 
-def build_consensus(quotes):
+def build_consensus(quotes, methods=METHODS):
     """
-    Все котировки -> {(home, away): {sel: {'p': медиана, 'n': контор,
-                                           'spread': разброс}}}
+    Все котировки -> {(home, away): {sel: {'p': ОСТОРОЖНАЯ оценка, 'n': контор,
+                                           'p_by': {метод: медиана},
+                                           'spread': разброс между конторами}}}
 
-    Медиана, а не среднее: клоны одного оператора (1xbet=22bet=megapari и
-    подобные) и просто кривые цены не должны тянуть оценку. Медиана к ним
+    Два усреднения, и оба нужны.
+
+    По конторам берётся МЕДИАНА: клоны одного оператора (1xbet=22bet=megapari
+    и подобные) и просто кривые цены не должны тянуть оценку. Медиана к ним
     устойчива, среднее -- нет.
+
+    По методам снятия маржи берётся МИНИМУМ, то есть самая осторожная оценка
+    вероятности (самая высокая справедливая цена). Это не перестраховка,
+    а единственный честный ответ на измеренный факт: расхождение между
+    методами -- реальная неопределённость измерения, а не выбор вкуса.
+    Замер на живой линии 7 сентября 2026: при базовом методе движок нашёл
+    21 «перевес», и ВСЕ 21 меняли знак при смене метода -- положительны
+    только под степенным, отрицательны под мультипликативным и аддитивным.
+    Все они лежали на кэфах ниже 1.35, где степенной де-виг сдвигает массу
+    к фавориту сильнее прочих. Это был бы 21 проигрышный сигнал подряд.
     """
     by_match_book = defaultdict(lambda: defaultdict(list))
     for q in quotes:
@@ -145,17 +202,27 @@ def build_consensus(quotes):
 
     out = {}
     for match, books in by_match_book.items():
-        probs = defaultdict(list)
+        per_method = {m: defaultdict(list) for m in methods}
         for book, qs in books.items():
-            for sel, p in devig_one_book(qs).items():
-                if 0.001 < p < 0.999:
-                    probs[sel].append(p)
+            for m in methods:
+                for sel, p in devig_one_book(qs, m3=m, m2=m).items():
+                    if 0.001 < p < 0.999:
+                        per_method[m][sel].append(p)
+        sels = set().union(*[set(d) for d in per_method.values()]) if per_method else set()
         agg = {}
-        for sel, vals in probs.items():
-            if len(vals) >= MIN_BOOKS:
-                a = np.array(vals)
-                agg[sel] = dict(p=float(np.median(a)), n=len(vals),
-                                spread=float(a.max() - a.min()))
+        for sel in sels:
+            med, ns = {}, []
+            for m in methods:
+                vals = per_method[m].get(sel) or []
+                if len(vals) >= MIN_BOOKS:
+                    med[m] = float(np.median(vals))
+                    ns.append(len(vals))
+            if len(med) < len(methods):      # метод не смог -- нет и оценки
+                continue
+            base = per_method[DEVIG2].get(sel) or []
+            agg[sel] = dict(p=min(med.values()), p_by=med, n=max(ns),
+                            spread=float(max(base) - min(base)) if base else None,
+                            method_spread=float(max(med.values()) - min(med.values())))
         if agg:
             out[match] = agg
     return out
@@ -178,7 +245,7 @@ def find_value(quotes, consensus, pin_fair=None, theta=THETA, bettable=BETTABLE)
     """
     best = defaultdict(lambda: (0.0, None))
     for q in quotes:
-        if q.book not in bettable:
+        if q.book not in bettable or q.price < ODDS_FLOOR:
             continue
         k = (q.home, q.away, q.sel)
         if q.price > best[k][0]:
@@ -194,14 +261,29 @@ def find_value(quotes, consensus, pin_fair=None, theta=THETA, bettable=BETTABLE)
         p_fair = min(cands)                    # осторожная оценка
         src = ('консенсус' if (c and p_fair == c['p']) else 'Pinnacle')
         ev = price * p_fair - 1.0
+        # Матожидание при КАЖДОМ методе снятия маржи. Находка засчитывается,
+        # только если положительна при всех: расхождение методов -- это
+        # погрешность измерения, и «перевес», живущий лишь при одном из них,
+        # неотличим от способа счёта. На живой линии этот фильтр снял
+        # 21 находку из 21, все на кэфах ниже 1.35.
+        ev_by = {}
+        if c:
+            for meth, pm in (c.get('p_by') or {}).items():
+                ev_by[meth] = price * min([pm] + ([pf] if pf is not None else [])) - 1.0
+        # Без консенсуса проверить устойчивость нечем: pinnacle_fair() считает
+        # одним методом. Такие исходы показываем, но НЕ засчитываем -- иначе
+        # в сигнал просочится ровно та ошибка, ради которой фильтр и заводился.
+        ev_worst = min(ev_by.values()) if ev_by else ev
+        robust = bool(ev_by)
         out.append(dict(
             home=h, away=a, sel=sel, price=price, book=book,
-            p_fair=p_fair, fair_price=1.0 / p_fair, ev=ev, ref=src,
+            p_fair=p_fair, fair_price=1.0 / p_fair, ev=ev, ev_worst=ev_worst,
+            ev_by=ev_by, ref=src,
             n_books=(c['n'] if c else 0),
             spread=(c['spread'] if c else None),
             p_cons=(c['p'] if c else None), p_pin=pf,
-            hit=ev > theta))
-    return sorted(out, key=lambda r: -r['ev'])
+            hit=(robust and ev_worst > theta)))
+    return sorted(out, key=lambda r: -r['ev_worst'])
 
 
 # ---------------------------------------------------------------------------
@@ -288,13 +370,14 @@ def main():
     if not val:
         print('нечего показывать')
         return
-    print('%-34s %-10s %7s %-10s %8s %8s %5s' %
-          ('матч', 'исход', 'кэф', 'контора', 'справ.', 'EV', 'контор'))
+    print('%-32s %-10s %6s %-9s %8s %9s %9s %4s' %
+          ('матч', 'исход', 'кэф', 'контора', 'справ.', 'EV', 'EV худш.', 'кнт'))
     for v in val[:25]:
         mark = '  <<<' if v['hit'] else ''
-        print('%-34s %-10s %7.2f %-10s %8.3f %+7.2f%% %5d%s' % (
-            f"{v['home'][:15]} — {v['away'][:15]}", v['sel'], v['price'],
-            v['book'][:10], v['fair_price'], 100 * v['ev'], v['n_books'], mark))
+        print('%-32s %-10s %6.2f %-9s %8.3f %+8.2f%% %+8.2f%% %4d%s' % (
+            f"{v['home'][:14]} — {v['away'][:14]}", v['sel'], v['price'],
+            v['book'][:9], v['fair_price'], 100 * v['ev'],
+            100 * v['ev_worst'], v['n_books'], mark))
 
     if '--save' in sys.argv:
         n = save_snapshot(quotes, errs)

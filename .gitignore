@@ -48,3 +48,7 @@ data/_*.csv
 data/_review_findings.json
 data/lineups.csv
 data/exp2_*.csv
+
+# Снимки линий: растут быстро, нужны только для калибровки порога.
+# Коммитит их воркфлоу опроса пачками, локальные прогоны — нет.
+data/sent_value.json.tmp
