@@ -1,0 +1,91 @@
+name: UAE опрос линий
+
+# НЕПРЕРЫВНЫЙ ОПРОС МНОГИХ КОНТОР.
+#
+# Зачем длинная задача вместо частого cron. Замерено: GitHub исполняет около
+# 10% запрошенных запусков расписания (26 фактических прогонов за 7 дней
+# против 259 запрошенных), провалы между проверками доходят до 5.5 часов.
+# Самоперезапуск через repository_dispatch невозможен: GITHUB_TOKEN намеренно
+# не может запускать другие воркфлоу.
+#
+# Поэтому одна задача живёт 5.5 часа и опрашивает изнутри каждые 3 минуты.
+# Даже при 10% исполнения ежечасного расписания это даёт 2-3 запуска в сутки
+# по 5.5 часа = 11-16 часов покрытия вместо нынешних минут.
+#
+# Стоимость: репозиторий публичный, минуты Actions на стандартных раннерах
+# не тарифицируются.
+#
+# Что ищем: максимальная цена среди контор, где можно поставить, против
+# справедливой цены (консенсус многих контор либо прямая цена Pinnacle,
+# берётся более осторожная). Прогнозная модель здесь НЕ участвует -- на
+# 717 исходах проверено, что её перевес анти-предиктивен (ROI -23.1%).
+on:
+  schedule:
+    # Ежечасно. Просим 24 раза в сутки, ожидаем 2-3 фактических запуска.
+    - cron: '9 * * * *'
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Сколько минут крутиться (по умолчанию 330 = 5.5 ч)'
+        type: string
+        default: '330'
+      send:
+        description: 'Слать находки в Telegram'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+# ОТДЕЛЬНАЯ ОЧЕРЕДЬ. Общий замок uae-repo-write здесь использовать нельзя:
+# задача живёт часами и заблокировала бы расчёт, CLV и подведение итогов.
+# Запись в репозиторий делается редкими пачками внутри и конфликты
+# разруливает своим ретраем с rebase.
+concurrency:
+  group: uae-poller
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Установить зависимости
+        run: pip install -r requirements.txt
+
+      - name: Настроить git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Опрос
+        env:
+          PYTHONIOENCODING: utf-8
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MINUTES: ${{ inputs.minutes || '330' }}
+        run: |
+          # Флаг отправки: по расписанию всегда шлём, вручную -- по галочке.
+          SEND="--send"
+          if [ "${{ inputs.send }}" = "false" ]; then SEND=""; fi
+          python src/poll.py --minutes "$MINUTES" $SEND --commit
+
+      - name: Сообщить о падении
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python -c "
+          from telegram_sender import send_message
+          send_message('⚠️ Опрос линий ОАЭ упал. Снимки за этот период потеряны.')
+          "
