@@ -178,6 +178,11 @@
    }
   },
   "pinnacle": {
+   "Al Ain — Al Wasl": {
+    "home": 1.6666666666666665,
+    "away": 4.26,
+    "draw": 4.220000000000001
+   },
    "Al Wahda — Sharjah FC": {
     "home": 2.46,
     "away": 2.77,
@@ -193,17 +198,12 @@
     "away": 5.79,
     "draw": 4.85
    },
-   "Al Ain — Al Wasl": {
-    "home": 1.6666666666666665,
-    "away": 4.26,
-    "draw": 4.220000000000001
-   },
    "Ajman — Al Ittihad Kalba": {
     "home": 2.08,
     "away": 3.27,
     "draw": 3.55
    }
   },
-  "checked_at": "2026-09-08T20:06Z"
+  "checked_at": "2026-09-08T20:37Z"
  }
 }
