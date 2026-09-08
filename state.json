@@ -184,14 +184,9 @@
     "draw": 3.34
    },
    "Khor Fakkan Club — Bani Yas": {
-    "home": 2.51,
-    "away": 2.51,
-    "draw": 3.74
-   },
-   "Ajman — Al Ittihad Kalba": {
-    "home": 2.08,
-    "away": 3.27,
-    "draw": 3.55
+    "home": 2.6100000000000003,
+    "away": 2.3899999999999997,
+    "draw": 3.78
    },
    "Al Jazira — Al-Nasr Dubai": {
     "home": 1.434782608695652,
@@ -202,8 +197,13 @@
     "home": 1.6666666666666665,
     "away": 4.26,
     "draw": 4.220000000000001
+   },
+   "Ajman — Al Ittihad Kalba": {
+    "home": 2.08,
+    "away": 3.27,
+    "draw": 3.55
    }
   },
-  "checked_at": "2026-09-08T13:23Z"
+  "checked_at": "2026-09-08T17:21Z"
  }
 }
