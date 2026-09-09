@@ -116,23 +116,49 @@ def notify(hits, send):
 
 
 def git_commit(msg):
-    """Коммитим снимки пачками: держать блокировку записи весь цикл нельзя."""
+    """
+    Коммитим снимки пачками: держать блокировку записи весь цикл нельзя.
+
+    Файлы стейджатся ПО ОДНОМУ и только существующие. Первая версия делала
+    `git add снимки sent_value.json` одной командой: пока файла уведомлений
+    ещё не было, git отвергал весь pathspec целиком и не стейджил НИЧЕГО,
+    дальше "изменений нет" -- и первый прогон 9 сентября 2026 (5.5 часа,
+    ~55 проходов) не сохранил ни одного снимка. Ошибки тоже глотались.
+    Теперь каждая неудача печатается: молчаливая потеря данных хуже шума в логе.
+    """
+    files = ['data/odds_snapshots.jsonl.gz', 'data/sent_value.json']
     try:
-        subprocess.run(['git', 'add', 'data/odds_snapshots.jsonl.gz',
-                        'data/sent_value.json'], cwd=ROOT, check=False)
-        r = subprocess.run(['git', 'diff', '--cached', '--quiet'], cwd=ROOT)
-        if r.returncode == 0:
+        staged = 0
+        for f in files:
+            if os.path.exists(os.path.join(ROOT, f)):
+                r = subprocess.run(['git', 'add', f], cwd=ROOT,
+                                   capture_output=True, text=True)
+                if r.returncode != 0:
+                    print(f'  git add {f}: {r.stderr.strip()}', file=sys.stderr)
+                else:
+                    staged += 1
+        if not staged:
+            print('  коммит: нечего стейджить', file=sys.stderr)
             return False
-        subprocess.run(['git', 'commit', '-m', msg], cwd=ROOT, check=True)
-        for _ in range(3):
+        if subprocess.run(['git', 'diff', '--cached', '--quiet'], cwd=ROOT).returncode == 0:
+            return False
+        r = subprocess.run(['git', 'commit', '-m', msg], cwd=ROOT,
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            print(f'  git commit: {r.stderr.strip()}', file=sys.stderr)
+            return False
+        for i in range(3):
             subprocess.run(['git', 'pull', '--rebase', '--autostash',
-                            'origin', 'main'], cwd=ROOT, check=False)
-            if subprocess.run(['git', 'push', 'origin', 'main'],
-                              cwd=ROOT).returncode == 0:
+                            'origin', 'main'], cwd=ROOT, capture_output=True)
+            r = subprocess.run(['git', 'push', 'origin', 'main'], cwd=ROOT,
+                               capture_output=True, text=True)
+            if r.returncode == 0:
+                print(f'  снимки закоммичены и отправлены')
                 return True
+            print(f'  push {i+1}/3 не прошёл: {r.stderr.strip()[:200]}', file=sys.stderr)
             time.sleep(5)
     except Exception as e:
-        print(f'  коммит не прошёл: {e}', file=sys.stderr)
+        print(f'  коммит не прошёл: {type(e).__name__}: {e}', file=sys.stderr)
     return False
 
 
