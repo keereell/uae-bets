@@ -219,7 +219,9 @@ def build_consensus(quotes, methods=METHODS):
                     ns.append(len(vals))
             if len(med) < len(methods):      # метод не смог -- нет и оценки
                 continue
-            base = per_method[DEVIG2].get(sel) or []
+            # Разброс между конторами считаем по первому методу набора: набор
+            # может не содержать DEVIG2, и жёсткая ссылка на него роняла расчёт.
+            base = per_method[methods[0]].get(sel) or []
             agg[sel] = dict(p=min(med.values()), p_by=med, n=max(ns),
                             spread=float(max(base) - min(base)) if base else None,
                             method_spread=float(max(med.values()) - min(med.values())))
