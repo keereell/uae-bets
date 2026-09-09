@@ -214,9 +214,9 @@
     "draw": 3.82
    },
    "Dubai United — Shabab Al Ahli": {
-    "home": 9.8,
-    "away": 1.2564102564102564,
-    "draw": 5.45
+    "home": 9.25,
+    "away": 1.267379679144385,
+    "draw": 5.41
    },
    "Ajman — Al Ittihad Kalba": {
     "home": 2.08,
@@ -224,14 +224,14 @@
     "draw": 3.55
    },
    "Al Ain — Al Wasl": {
-    "home": 1.6666666666666665,
-    "away": 4.33,
-    "draw": 4.35
+    "home": 1.6756756756756757,
+    "away": 4.32,
+    "draw": 4.3
    },
    "Al Jazira — Al-Nasr Dubai": {
-    "home": 1.5025125628140703,
-    "away": 5.39,
-    "draw": 4.720000000000001
+    "home": 1.4926108374384237,
+    "away": 5.48,
+    "draw": 4.76
    },
    "Al Wahda — Sharjah FC": {
     "home": 2.46,
@@ -239,6 +239,6 @@
     "draw": 3.34
    }
   },
-  "checked_at": "2026-09-09T17:16Z"
+  "checked_at": "2026-09-09T19:51Z"
  }
 }
