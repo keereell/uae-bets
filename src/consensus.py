@@ -69,6 +69,13 @@ ODDS_FLOOR = 1.20
 # При двух-трёх конторах медиана -- это не консенсус, а шум.
 MIN_BOOKS = 5
 
+# Минимальное число ДОСТУПНЫХ ДЛЯ СТАВКИ операторов, котирующих исход.
+# Одинокая линия -- это либо матч, который остальные уже закрыли (и она
+# живая или застывшая), либо рынок, который остальные не торгуют. В обоих
+# случаях «максимум среди контор» -- не находка, а артефакт. 10 сентября
+# ровно так Leon остался единственной конторой через 13 минут после свистка.
+MIN_BETTABLE = 2
+
 # Порог перевеса. Стартовое значение, а не истина: 1% -- это измеренный
 # разброс между пятью методами снятия маржи на прямых ценах Pinnacle,
 # то есть погрешность самого измерения. Ниже неё «перевес» неотличим от
@@ -309,17 +316,21 @@ def find_value(quotes, consensus, pin_fair=None, theta=THETA, bettable=BETTABLE)
     """
     best = defaultdict(lambda: (0.0, None))
     ko = {}
+    n_bet = defaultdict(set)
     for q in quotes:
         if q.kickoff:
             ko[(q.home, q.away)] = min(ko.get((q.home, q.away), q.kickoff), q.kickoff)
         if q.book not in bettable or q.price < ODDS_FLOOR:
             continue
         k = (q.home, q.away, q.sel)
+        n_bet[k].add(operator_of(q.book))
         if q.price > best[k][0]:
             best[k] = (q.price, q.book)
 
     out = []
     for (h, a, sel), (price, book) in best.items():
+        if len(n_bet[(h, a, sel)]) < MIN_BETTABLE:
+            continue                         # одинокая линия -- см. MIN_BETTABLE
         c = (consensus.get((h, a)) or {}).get(sel)
         pf = (pin_fair.get((h, a)) or {}).get(sel) if pin_fair else None
         if c is None and pf is None:

@@ -98,7 +98,9 @@ def notify(hits, send):
         return 0
     sent = _load_sent()
     now = time.time()
-    sent = {k: v for k, v in sent.items() if v.get('ko', now) >= now - 86400}
+    # Записи без времени матча (старый формат) считаем просроченными: иначе
+    # они жили бы вечно и глушили свежие находки.
+    sent = {k: v for k, v in sent.items() if v.get('ko', 0) >= now - 86400}
     fresh = []
     for v in hits:
         ko = v.get('kickoff') or 0

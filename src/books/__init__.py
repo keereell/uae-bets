@@ -35,6 +35,8 @@
 import importlib
 import os
 import pkgutil
+import sys
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -202,6 +204,32 @@ def fetch_all(keys=None, verbose=True):
     # матчей отвалилась по 429/5xx, возвращает неполную линию с err=None, и
     # консенсус для остальных матчей тихо худеет. Сверяем покрытие каждой
     # конторы с объединением матчей по всем -- это ловит любой адаптер разом.
+    # СТАРТОВАВШИЕ МАТЧИ ВЫБРАСЫВАЮТСЯ ЦЕЛИКОМ. 10 сентября 2026 через 13 минут
+    # после свистка все прямые конторы сняли предматчевую линию, а Leon отдал
+    # LIVE-цены (Аль-Наср П2 12.5 после гола хозяев); агрегаторы при этом ещё
+    # показывали предматчевое закрытие. Консенсус вышел предматчевым, «максимум
+    # среди контор» -- живым, и бот отправил 27 сигналов с перевесом до +93%.
+    # Время начала берётся как минимум по всем источникам; матч без времени
+    # начала ни у одного источника тоже отбрасывается -- проверить нельзя.
+    now = time.time()
+    ko = {}
+    for q in out:
+        if q.kickoff:
+            m = (q.home, q.away)
+            ko[m] = min(ko.get(m, q.kickoff), q.kickoff)
+    started = {m for m, k in ko.items() if k <= now + 60}
+    unknown = {(q.home, q.away) for q in out} - set(ko)
+    if started or unknown:
+        drop = started | unknown
+        out = [q for q in out if (q.home, q.away) not in drop]
+        note = []
+        if started:
+            note.append('начались: ' + ', '.join(f'{h} — {a}' for h, a in sorted(started)))
+        if unknown:
+            note.append('без времени начала: ' + ', '.join(f'{h} — {a}' for h, a in sorted(unknown)))
+        errs['_отсечено'] = '; '.join(note)
+        if verbose:
+            print('  отсечено: ' + '; '.join(note))
     fixtures = {(q.home, q.away) for q in out}
     for k in (keys if keys is not None else available()):
         if k in errs:
