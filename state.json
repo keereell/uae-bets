@@ -218,11 +218,6 @@
     "away": 1.267379679144385,
     "draw": 5.41
    },
-   "Al Wahda — Sharjah FC": {
-    "home": 2.46,
-    "away": 2.77,
-    "draw": 3.34
-   },
    "Al Ain — Al Wasl": {
     "home": 1.6756756756756757,
     "away": 4.32,
@@ -237,8 +232,13 @@
     "home": 2.77,
     "away": 2.26,
     "draw": 3.82
+   },
+   "Al Wahda — Sharjah FC": {
+    "home": 2.46,
+    "away": 2.77,
+    "draw": 3.34
    }
   },
-  "checked_at": "2026-09-09T22:40Z"
+  "checked_at": "2026-09-10T00:14Z"
  }
 }
