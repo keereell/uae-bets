@@ -195,15 +195,15 @@
     "away": 2.24,
     "draw": 3.48
    },
-   "Ajman — Al Ittihad Kalba": {
-    "home": 2.1,
-    "away": 3.31,
-    "draw": 3.59
-   },
    "Al Wahda — Sharjah FC": {
     "home": 2.49,
     "away": 2.79,
     "draw": 3.4
+   },
+   "Ajman — Al Ittihad Kalba": {
+    "home": 2.1,
+    "away": 3.31,
+    "draw": 3.59
    },
    "Khor Fakkan Club — Bani Yas": {
     "home": 2.81,
@@ -211,6 +211,6 @@
     "draw": 3.8
    }
   },
-  "checked_at": "2026-09-10T20:21Z"
+  "checked_at": "2026-09-10T22:42Z"
  }
 }
