@@ -23,6 +23,7 @@
     python src/consensus.py --save     # то же + записать снимок в журнал
 """
 import os
+import re
 import sys
 import time
 import json
@@ -36,18 +37,27 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 ROOT = os.path.dirname(HERE)
 
-from books import fetch_all, BETTABLE, Quote          # noqa: E402
+from books import fetch_all, BETTABLE, Quote, norm_team   # noqa: E402
 from markets import DEVIG                             # noqa: E402
 
-SNAPSHOTS = os.path.join(ROOT, 'data', 'odds_snapshots.jsonl.gz')
+SNAPSHOTS = os.path.join(ROOT, 'data', 'odds_snapshots.jsonl.gz')   # старый единый файл
+# Снимки пишутся ПО ДНЯМ. Единый gzip рос на ~64 КБ за проход и упёрся бы
+# в жёсткий лимит GitHub 100 МБ на файл через ~2 недели, после чего каждый
+# push отвергался бы молча. Дневной файл остаётся маленьким и неизменяемым.
+SNAPSHOT_DIR = os.path.join(ROOT, 'data', 'snapshots')
 
-DEVIG3 = 'shin'      # трёхсторонние рынки: Штрумбель (2014) на 37 турнирах
-DEVIG2 = 'power'     # двусторонние: степенной и мультипликативный почти совпадают
-
-# Все методы снятия маржи, по которым проверяется устойчивость находки.
-# Расхождение между ними -- измеренная неопределённость, а не вкусовщина:
-# на живой линии оно переворачивало знак у 21 находки из 21.
-METHODS = ('mult', 'add', 'power', 'shin', 'oddsratio')
+# ОСНОВНОЙ метод снятия маржи -- степенной, по калибровке на этой лиге
+# (366 матчей, закрывающие цены Bet365, log-loss меньше = лучше):
+#   power 0.91675  add 0.91748  oddsratio 0.91843  shin 0.91860  mult 0.92273
+# Мультипликативный исключён совсем: он худший по log-loss и сильнее всех
+# недооценивает фаворитов (кэф 1.00-1.35: факт 83.6%, mult даёт 72.6%).
+# Прежнее правило «минимум по пяти методам» брало для каждого фаворита
+# именно mult -- ту оценку, что здесь калибрована хуже всех, -- и на выходе
+# давало ноль находок при любой линии. Справедливая цена теперь -- оценка
+# основного метода; остальные три служат проверкой устойчивости знака.
+DEVIG3 = 'power'
+DEVIG2 = 'power'
+METHODS = ('power', 'add', 'shin', 'oddsratio')
 
 # Практический пол по коэффициенту. Ниже 1.20 ставка требует огромной суммы
 # ради копеечной отдачи, конторы такие ставки режут лимитами, а цена округлена
@@ -69,6 +79,42 @@ THETA = 0.01
 # ---------------------------------------------------------------------------
 #                     РАЗБОР ИСХОДОВ НА ЗАМКНУТЫЕ РЫНКИ
 # ---------------------------------------------------------------------------
+# Семейства одного оператора под разными брендами и через разные агрегаторы.
+# Ключ book приходит как 'marathon', 'op:marathonbet', 'fs:Marathonbet.it',
+# 'bx:1xbet', 'fs:1xBet.br' -- всё это одна цена, посчитанная один раз.
+_CLONE_FAMILIES = {
+    '1xbet': ('1xbet', '22bet', 'megapari', '1xstavka', 'linebet'),
+    'betano': ('betano', 'stoiximan', 'kaizen'),
+    'entain': ('bwin', 'coral', 'ladbrokes', 'sportingbet', 'partypoker', 'betmgm',
+               'gamebookers'),
+    'mystake': ('mystake', 'goldenbet', 'freshbet', 'jackbit'),
+    'fezbet': ('fezbet', 'powbet', 'tooniebet', 'campobet'),
+    'bcgame': ('bcgame', 'ninecasino', '4rabet'),
+    'williamhill': ('williamhill',),
+    'marathon': ('marathon', 'marathonbet'),
+    'fonbet': ('fonbet', 'pari'),
+    'betcity': ('betcity',),
+    'bet365': ('bet365',),
+    'unibet': ('unibet', '32red'),
+    'betsson': ('betsson', 'betsafe', 'nordicbet'),
+    'pinnacle': ('pinnacle',),
+}
+_STEM = {stem: fam for fam, stems in _CLONE_FAMILIES.items() for stem in stems}
+
+
+def operator_of(book):
+    """'fs:1xBet.br' -> '1xbet'; 'op:marathonbet' -> 'marathon'; 'leon' -> 'leon'."""
+    s = (book or '').lower()
+    for pre in ('fs:', 'bx:', 'op:'):
+        if s.startswith(pre):
+            s = s[len(pre):]
+    s = re.sub(r'[^a-z0-9]', '', s)
+    for stem in sorted(_STEM, key=len, reverse=True):
+        if s.startswith(stem):
+            return _STEM[stem]
+    return s or book
+
+
 def _parse_sel(sel):
     """'O2.5' -> ('total', 2.5, 'over'); 'AH1-0.25' -> ('ah', -0.25, 1); ..."""
     if sel in ('1', 'X', '2'):
@@ -152,14 +198,19 @@ def devig_one_book(quotes, m3=None, m2=None):
                 out[f'O{line:g}'] = float(q[0])
                 out[f'U{line:g}'] = float(q[1])
 
-    # Азиатская фора: 'AH1-0.5' замыкается с 'AH2+0.5'. Группируем по модулю
-    # линии и требуем строгой зеркальности знаков.
+    # Азиатская фора: 'AH1-0.5' замыкается с 'AH2+0.5'. Ключ группировки --
+    # линия СО СТОРОНЫ ХОЗЯЕВ (для гостей знак переворачивается). Группировка
+    # по модулю линии была ошибкой: у конторы, котирующей и -0.25, и +0.25,
+    # вторая пара затирала первую, а уцелевшие ноги не были зеркальными --
+    # у 1xbet из 17 замкнутых линий выживало 13, и терялись как раз линии
+    # около нуля, самые ликвидные.
     pairs = defaultdict(dict)
     for sel, price in by.items():
         kind, line, team = _parse_sel(sel)
         if kind == 'ah':
-            pairs[abs(line)][team] = (price, line)
-    for _mag, sides in pairs.items():
+            home_line = line if team == 1 else -line
+            pairs[round(home_line, 4)][team] = (price, line)
+    for _hl, sides in pairs.items():
         if 1 not in sides or 2 not in sides:
             continue
         (p1, l1), (p2, l2) = sides[1], sides[2]
@@ -196,9 +247,20 @@ def build_consensus(quotes, methods=METHODS):
     Все они лежали на кэфах ниже 1.35, где степенной де-виг сдвигает массу
     к фавориту сильнее прочих. Это был бы 21 проигрышный сигнал подряд.
     """
-    by_match_book = defaultdict(lambda: defaultdict(list))
-    for q in quotes:
-        by_match_book[(q.home, q.away)][q.book].append(q)
+    # Группируем по ОПЕРАТОРУ, а не по строке book. Один оператор приходит
+    # под несколькими ключами (marathon, op:marathonbet, fs:Marathonbet.it;
+    # 1xbet = 22bet = megapari через три агрегатора) и раньше считался
+    # несколькими независимыми конторами: на снимке 7 сентября 374 из 452
+    # ячеек проходили MIN_BOOKS=5 силами одного семейства 1xBet. Ключ
+    # прямой конторы (где ставим) имеет приоритет, дальше -- первый встречный.
+    ordered = sorted(quotes, key=lambda q: 0 if q.book in BETTABLE else 1)
+    by_match_op = defaultdict(lambda: defaultdict(dict))
+    for q in ordered:
+        d = by_match_op[(q.home, q.away)][operator_of(q.book)]
+        if q.sel not in d:
+            d[q.sel] = q
+    by_match_book = {m: {op: list(d.values()) for op, d in ops.items()}
+                     for m, ops in by_match_op.items()}
 
     out = {}
     for match, books in by_match_book.items():
@@ -222,7 +284,7 @@ def build_consensus(quotes, methods=METHODS):
             # Разброс между конторами считаем по первому методу набора: набор
             # может не содержать DEVIG2, и жёсткая ссылка на него роняла расчёт.
             base = per_method[methods[0]].get(sel) or []
-            agg[sel] = dict(p=min(med.values()), p_by=med, n=max(ns),
+            agg[sel] = dict(p=med[methods[0]], p_by=med, n=max(ns),
                             spread=float(max(base) - min(base)) if base else None,
                             method_spread=float(max(med.values()) - min(med.values())))
         if agg:
@@ -246,7 +308,10 @@ def find_value(quotes, consensus, pin_fair=None, theta=THETA, bettable=BETTABLE)
     прошла, она должна быть выгодна против ОБОИХ эталонов сразу.
     """
     best = defaultdict(lambda: (0.0, None))
+    ko = {}
     for q in quotes:
+        if q.kickoff:
+            ko[(q.home, q.away)] = min(ko.get((q.home, q.away), q.kickoff), q.kickoff)
         if q.book not in bettable or q.price < ODDS_FLOOR:
             continue
         k = (q.home, q.away, q.sel)
@@ -278,7 +343,7 @@ def find_value(quotes, consensus, pin_fair=None, theta=THETA, bettable=BETTABLE)
         ev_worst = min(ev_by.values()) if ev_by else ev
         robust = bool(ev_by)
         out.append(dict(
-            home=h, away=a, sel=sel, price=price, book=book,
+            home=h, away=a, sel=sel, price=price, book=book, kickoff=ko.get((h, a)),
             p_fair=p_fair, fair_price=1.0 / p_fair, ev=ev, ev_worst=ev_worst,
             ev_by=ev_by, ref=src,
             n_books=(c['n'] if c else 0),
@@ -303,27 +368,33 @@ def save_snapshot(quotes, errs):
         quotes=[dict(b=q.book, h=q.home, a=q.away, s=q.sel, p=q.price,
                      k=q.kickoff) for q in quotes],
     )
-    os.makedirs(os.path.dirname(SNAPSHOTS), exist_ok=True)
-    with gzip.open(SNAPSHOTS, 'at', encoding='utf-8') as f:
+    os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+    path = os.path.join(SNAPSHOT_DIR, rec['at'][:10] + '.jsonl.gz')
+    with gzip.open(path, 'at', encoding='utf-8') as f:
         f.write(json.dumps(rec, ensure_ascii=False) + '\n')
-    return len(rec['quotes'])
+    return len(rec['quotes']), path
 
 
 def pinnacle_fair():
     """Прямые справедливые вероятности Pinnacle -> {(home, away): {sel: p}}."""
+    # Имена -- через тот же norm_team, что и у всех контор. Раньше здесь был
+    # NAME_MAP из sharp.py, в котором нет 'Sharjah FC' (именно так Pinnacle
+    # зовёт Шарджу): ключ не совпадал с адаптерами, и эталон Pinnacle для
+    # любого матча Шарджи молча пропадал -- в журнале это видно как ярус «?».
+    # Ошибки не глотаем: молчащий эталон неотличим от отсутствующего.
     try:
         import pinnacle
-        from sharp import NAME_MAP
-    except Exception:
+        games = pinnacle.parse()
+    except Exception as e:
+        print(f'  Pinnacle недоступен: {type(e).__name__}: {e}', file=sys.stderr)
         return {}
     out = {}
-    try:
-        games = pinnacle.parse()
-    except Exception:
-        return {}
     for g in games.values():
-        h = NAME_MAP.get(g['home'], g['home'])
-        a = NAME_MAP.get(g['away'], g['away'])
+        h, a = norm_team(g.get('home')), norm_team(g.get('away'))
+        if not h or not a:
+            print(f"  Pinnacle: не распознал {g.get('home')!r} — {g.get('away')!r}",
+                  file=sys.stderr)
+            continue
         d = {}
         ml = g.get('moneyline') or {}
         if all(k in ml for k in ('home', 'draw', 'away')):
@@ -382,8 +453,8 @@ def main():
             100 * v['ev_worst'], v['n_books'], mark))
 
     if '--save' in sys.argv:
-        n = save_snapshot(quotes, errs)
-        print(f'\nснимок записан: {n} котировок -> {SNAPSHOTS}')
+        n, path = save_snapshot(quotes, errs)
+        print(f'\nснимок записан: {n} котировок -> {path}')
 
 
 if __name__ == '__main__':

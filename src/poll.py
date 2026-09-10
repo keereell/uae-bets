@@ -5,9 +5,10 @@
 Почему цикл внутри задачи, а не частый cron. Замерено: GitHub исполняет
 около 10% запрошенных запусков расписания -- 26 фактических прогонов за
 7 дней против 259 запрошенных, провалы между проверками до 5.5 часов.
-Самоперезапуск через repository_dispatch невозможен: GITHUB_TOKEN намеренно
-не может запускать другие воркфлоу, а заводить личный токен ради этого --
-лишний секрет в обмен на удобство.
+Самоперезапуск ВОЗМОЖЕН и без личного токена: по документации GitHub события
+workflow_dispatch и repository_dispatch создают запуск даже от GITHUB_TOKEN
+(нужно permissions: actions: write). Воркфлоу в конце задачи запускает свою
+же копию; очередь uae-poller держит её, пока текущая не закончится.
 
 Поэтому одна задача живёт до 5.5 часов (предел GitHub -- 6) и опрашивает
 изнутри. Даже при 10% исполнения ежечасного расписания это даёт 2-3 запуска
@@ -36,7 +37,7 @@ ROOT = os.path.dirname(HERE)
 
 from books import fetch_all, BETTABLE                              # noqa: E402
 from consensus import (build_consensus, find_value, pinnacle_fair,
-                       save_snapshot, THETA)                        # noqa: E402
+                       save_snapshot, THETA, SNAPSHOT_DIR)          # noqa: E402
 
 STATE_SENT = os.path.join(ROOT, 'data', 'sent_value.json')
 INTERVAL = 180.0          # секунд между проверками
@@ -85,24 +86,31 @@ def notify(hits, send):
     """
     Шлём только НОВОЕ и только заметно подорожавшее. Повторять одну и ту же
     находку каждые три минуты -- быстрый способ приучить себя не читать бота.
+
+    Порядок важен: СНАЧАЛА отправить, ПОТОМ записать как отправленное, и только
+    если отправка удалась. Первая версия записывала до отправки (и даже при
+    выключенном --send): одна ошибка Telegram -- и находка считалась
+    доставленной, а повтор требовал роста перевеса ещё на процент. Ключ
+    включает дату матча: без неё запись прошлогодней встречи той же пары
+    глушила бы свежий перевес. Старые записи вычищаются.
     """
     if not hits:
         return 0
     sent = _load_sent()
+    now = time.time()
+    sent = {k: v for k, v in sent.items() if v.get('ko', now) >= now - 86400}
     fresh = []
     for v in hits:
-        k = f"{v['home']}|{v['away']}|{v['sel']}"
+        ko = v.get('kickoff') or 0
+        day = dt.datetime.fromtimestamp(ko, dt.timezone.utc).strftime('%Y-%m-%d') if ko else '?'
+        k = f"{v['home']}|{v['away']}|{v['sel']}|{day}"
         prev = sent.get(k, {}).get('ev', -9)
         if v['ev'] > prev + 0.01:
-            fresh.append(v)
-            sent[k] = dict(ev=float(v['ev']), price=float(v['price']),
-                           book=v['book'], at=dt.datetime.now(dt.timezone.utc)
-                           .strftime('%Y-%m-%dT%H:%MZ'))
+            fresh.append((k, v))
     if not fresh:
         return 0
-    _save_sent(sent)
     if not send:
-        print('  (--send не задан, не отправляю)')
+        print(f'  (--send не задан: {len(fresh)} находок не отправляю и не запоминаю)')
         return len(fresh)
     try:
         from telegram_sender import send_message
@@ -111,27 +119,35 @@ def notify(hits, send):
         from telegram_sender import send_message
     head = (f'💰 <b>Найден перевес по цене</b> ({len(fresh)})\n'
             f'<i>максимальная цена против справедливой; модель не участвует</i>\n\n')
-    send_message(head + '\n\n'.join(fmt(v) for v in fresh))
+    ok = send_message(head + '\n\n'.join(fmt(v) for _, v in fresh))
+    if not ok:
+        print('  Telegram не принял сообщение -- находки НЕ помечены отправленными',
+              file=sys.stderr)
+        return 0
+    stamp = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
+    for k, v in fresh:
+        sent[k] = dict(ev=float(v['ev']), price=float(v['price']), book=v['book'],
+                       ko=float(v.get('kickoff') or now), at=stamp)
+    _save_sent(sent)
     return len(fresh)
-
 
 def git_commit(msg):
     """
     Коммитим снимки пачками: держать блокировку записи весь цикл нельзя.
 
-    Файлы стейджатся ПО ОДНОМУ и только существующие. Первая версия делала
-    `git add снимки sent_value.json` одной командой: пока файла уведомлений
-    ещё не было, git отвергал весь pathspec целиком и не стейджил НИЧЕГО,
-    дальше "изменений нет" -- и первый прогон 9 сентября 2026 (5.5 часа,
-    ~55 проходов) не сохранил ни одного снимка. Ошибки тоже глотались.
-    Теперь каждая неудача печатается: молчаливая потеря данных хуже шума в логе.
+    Файлы стейджатся ПО ОДНОМУ и только существующие: `git add a b` при
+    отсутствующем b не стейджит ничего, и первый прогон 9 сентября 2026
+    так потерял все снимки. Результат rebase проверяется: незавершённый
+    rebase оставлял репозиторий в подвешенном состоянии, и все последующие
+    коммиты прогона пропадали. Каждая неудача печатается.
+    -> True если отправлено (или нечего было), False если нет.
     """
-    files = ['data/odds_snapshots.jsonl.gz', 'data/sent_value.json']
+    files = ['data/snapshots', 'data/sent_value.json']
     try:
         staged = 0
         for f in files:
             if os.path.exists(os.path.join(ROOT, f)):
-                r = subprocess.run(['git', 'add', f], cwd=ROOT,
+                r = subprocess.run(['git', 'add', '-A', f], cwd=ROOT,
                                    capture_output=True, text=True)
                 if r.returncode != 0:
                     print(f'  git add {f}: {r.stderr.strip()}', file=sys.stderr)
@@ -141,26 +157,30 @@ def git_commit(msg):
             print('  коммит: нечего стейджить', file=sys.stderr)
             return False
         if subprocess.run(['git', 'diff', '--cached', '--quiet'], cwd=ROOT).returncode == 0:
-            return False
+            return True                      # нечего коммитить -- это не ошибка
         r = subprocess.run(['git', 'commit', '-m', msg], cwd=ROOT,
                            capture_output=True, text=True)
         if r.returncode != 0:
             print(f'  git commit: {r.stderr.strip()}', file=sys.stderr)
             return False
         for i in range(3):
-            subprocess.run(['git', 'pull', '--rebase', '--autostash',
-                            'origin', 'main'], cwd=ROOT, capture_output=True)
+            r = subprocess.run(['git', 'pull', '--rebase', '--autostash', 'origin', 'main'],
+                               cwd=ROOT, capture_output=True, text=True)
+            if r.returncode != 0:
+                print(f'  rebase не прошёл: {r.stderr.strip()[:200]}', file=sys.stderr)
+                subprocess.run(['git', 'rebase', '--abort'], cwd=ROOT, capture_output=True)
+                time.sleep(5)
+                continue
             r = subprocess.run(['git', 'push', 'origin', 'main'], cwd=ROOT,
                                capture_output=True, text=True)
             if r.returncode == 0:
-                print(f'  снимки закоммичены и отправлены')
+                print('  снимки закоммичены и отправлены')
                 return True
             print(f'  push {i+1}/3 не прошёл: {r.stderr.strip()[:200]}', file=sys.stderr)
             time.sleep(5)
     except Exception as e:
         print(f'  коммит не прошёл: {type(e).__name__}: {e}', file=sys.stderr)
     return False
-
 
 def one_pass(send=False, verbose=True):
     quotes, errs = fetch_all(verbose=verbose)
@@ -177,8 +197,11 @@ def one_pass(send=False, verbose=True):
     if verbose:
         best = f"{100*val[0]['ev']:+.2f}%" if val else '—'
         print(f'  котировок {len(quotes)}, контор для ставки {n_books}, '
-              f'матчей {len(cons)}, находок {len(hits)} (лучшее {best}), '
-              f'отправлено {n_sent}')
+              f'матчей {len(cons)}, Pinnacle {len(pin)}, находок {len(hits)} '
+              f'(лучшее {best}), отправлено {n_sent}')
+    if not pin:
+        print('  ВНИМАНИЕ: эталон Pinnacle пуст, находки судятся только по консенсусу',
+              file=sys.stderr)
     return quotes, len(hits), n_sent
 
 
@@ -194,8 +217,10 @@ def main():
     deadline = time.time() + a.minutes * 60
     i = 0
     total_hits = 0
+    commit_failed = False
     while True:
         i += 1
+        t0 = time.time()
         print(f'[{dt.datetime.now(dt.timezone.utc):%H:%M:%S}Z] проход {i}')
         try:
             quotes, n_hits, _ = one_pass(send=a.send, verbose=(i == 1))
@@ -205,19 +230,25 @@ def main():
             quotes = None
 
         if a.commit and i % COMMIT_EVERY == 0:
-            git_commit(f'снимки линий {dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ} [skip ci]')
+            if not git_commit(f'снимки линий {dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ} [skip ci]'):
+                commit_failed = True
 
         if a.minutes <= 0 or time.time() >= deadline:
             break
         if quotes and not upcoming_soon(quotes):
             print('  ближайшие 72 часа матчей нет, выхожу')
             break
-        time.sleep(max(5.0, a.interval))
+        # Спим ОСТАТОК интервала, а не весь интервал: сам проход занимает
+        # ~150 с, и прежний код давал реальный шаг ~330 с вместо обещанных 180.
+        time.sleep(max(5.0, a.interval - (time.time() - t0)))
 
     if a.commit:
-        git_commit(f'снимки линий {dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ} [skip ci]')
+        if not git_commit(f'снимки линий {dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ} [skip ci]'):
+            commit_failed = True
     print(f'\nпроходов {i}, находок всего {total_hits}')
-    return 0
+    # Потерянные снимки -- это провал прогона, даже если опрос шёл: иначе
+    # зелёная задача скрывала бы молчаливую потерю данных.
+    return 1 if commit_failed else 0
 
 
 if __name__ == '__main__':

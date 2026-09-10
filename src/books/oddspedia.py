@@ -198,7 +198,7 @@ def _get(op, url, tries=4):
                     body = gzip.decompress(body)
                 return body
         except urllib.error.HTTPError as e:
-            if e.code not in (403, 429, 502, 503) or i == tries - 1:
+            if e.code not in (403, 429, 500, 502, 503) or i == tries - 1:
                 raise
         except Exception:
             if i == tries - 1:

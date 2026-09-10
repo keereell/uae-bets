@@ -198,4 +198,18 @@ def fetch_all(keys=None, verbose=True):
             n_m = len({(q.home, q.away) for q in qs})
             print(f'  {k:<12} котировок {len(qs):>5}  матчей {n_m:>2}'
                   + (f'  ОШИБКА: {err[:70]}' if err else ''))
+    # ЧАСТИЧНЫЙ ответ -- тоже сбой, только тихий. Адаптер, у которого часть
+    # матчей отвалилась по 429/5xx, возвращает неполную линию с err=None, и
+    # консенсус для остальных матчей тихо худеет. Сверяем покрытие каждой
+    # конторы с объединением матчей по всем -- это ловит любой адаптер разом.
+    fixtures = {(q.home, q.away) for q in out}
+    for k in (keys if keys is not None else available()):
+        if k in errs:
+            continue
+        mine = {(q.home, q.away) for q in out
+                if q.book == k or q.book.startswith(k[:2] + ':')}
+        if mine and len(mine) < len(fixtures):
+            errs[k] = f'частично: {len(mine)} из {len(fixtures)} матчей'
+            if verbose:
+                print(f'  {k:<12} ЧАСТИЧНО: {len(mine)} из {len(fixtures)} матчей')
     return out, errs
