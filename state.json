@@ -131,9 +131,6 @@
  "runs": 52,
  "watch": {
   "fixtures": {
-   "4820630": "Dubai United — Shabab Al Ahly",
-   "4820631": "Jazira Abu Dhabi — Al Nasr Dubai",
-   "4820626": "Al Ain — Al Wasl",
    "4820627": "Khor Fakkan — Baniyas",
    "4820628": "Hatta Club — Al Dhafra",
    "4820625": "Ajman Club — Kalba",
@@ -191,9 +188,14 @@
   },
   "pinnacle": {
    "Hatta — Al Dhafra SCC": {
-    "home": 3.02,
-    "away": 2.24,
-    "draw": 3.48
+    "home": 3.05,
+    "away": 2.26,
+    "draw": 3.52
+   },
+   "Khor Fakkan Club — Bani Yas": {
+    "home": 2.81,
+    "away": 2.29,
+    "draw": 3.8
    },
    "Al Wahda — Sharjah FC": {
     "home": 2.49,
@@ -204,13 +206,8 @@
     "home": 2.1,
     "away": 3.31,
     "draw": 3.59
-   },
-   "Khor Fakkan Club — Bani Yas": {
-    "home": 2.81,
-    "away": 2.29,
-    "draw": 3.8
    }
   },
-  "checked_at": "2026-09-10T22:42Z"
+  "checked_at": "2026-09-11T00:11Z"
  }
 }
