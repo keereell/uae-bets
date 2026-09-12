@@ -33,6 +33,10 @@ on:
         description: 'Ничего не отправлять, только посчитать'
         type: boolean
         default: false
+      horizon_days:
+        description: 'Горизонт прогноза в днях (по умолчанию 8; 40 — посмотреть следующий тур заранее)'
+        type: string
+        default: ''
 
 # Бот коммитит обратно data/matches.csv, data/shots.csv и state.json.
 permissions:
@@ -70,6 +74,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PYTHONIOENCODING: utf-8
+          # пустая строка = значение по умолчанию в value_report (8 дней)
+          FORECAST_HORIZON_DAYS: ${{ inputs.horizon_days || '8' }}
         run: |
           python bot.py \
             ${{ (inputs.force == true) && '--force' || '' }} \
