@@ -189,7 +189,8 @@ def predict_market_open(train, test):
 
 
 def predict_dixon_coles(train, test):
-    """Действующая модель проекта: Диксон-Коулз на xG с игры."""
+    """Прежняя модель проекта: Диксон-Коулз на xG с игры. С 12.09.2026 в дайджесте
+    вероятности даёт models/odds_elo; DC остаётся запасной и для ожидаемого счёта."""
     from model import DixonColes, detect_newcomers
     from markets import wdl
     from predict import best_params

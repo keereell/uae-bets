@@ -154,7 +154,33 @@ def main():
     # когда составы и линии уже осмысленны; переопределяется переменной
     # окружения FORECAST_HORIZON_DAYS (нужно для проверок в паузе календаря).
     _horizon = float(os.environ.get('FORECAST_HORIZON_DAYS', 8))
-    for _, r in up[(up.ts > _now - 3600) & (up.ts <= _now + _horizon * 86400)].iterrows():
+    horizon_df = up[(up.ts > _now - 3600) & (up.ts <= _now + _horizon * 86400)]
+
+    # ПРОГНОЗ ДЛЯ ДАЙДЖЕСТА -- победитель турнира моделей (12 сентября 2026,
+    # src/models/, протокол src/eval_protocol.py, n=264): рейтинг на котировках
+    # с xG в обновлении, log-loss 0.94316 против 0.96216 у Диксона-Коулза и
+    # 0.94692 у открывающей линии Bet365. Вровень с рынком, на 0.019 лучше DC.
+    # DC остаётся для ожидаемого счёта и рейтингов атаки/обороны (они
+    # читаемы) и как запасной прогноз, если победитель упал.
+    elo_p = {}
+    if len(horizon_df):
+        try:
+            if os.environ.get('FORECAST_FORCE_DC'):        # проверка запасного пути
+                raise RuntimeError('FORECAST_FORCE_DC задан: рейтинг отключён принудительно')
+            from models.odds_elo import predict as elo_predict
+            played = df[df.played.fillna(False) & df.hg.notna()]
+            P = elo_predict(played.copy(), horizon_df.copy())
+            for (_, rr), pr in zip(horizon_df.iterrows(), P):
+                elo_p[(rr.home, rr.away)] = [float(pr[0]), float(pr[1]), float(pr[2])]
+        except Exception as e:
+            # В stdout, а не только в stderr: бот печатает stderr дочернего
+            # процесса лишь при ненулевом коде, а тут код нулевой -- иначе
+            # откат на DC прошёл бы незамеченным в логе Actions.
+            elo_p = {}
+            print(f'!! Рейтинг на котировках недоступен, прогноз от Диксона-Коулза: '
+                  f'{type(e).__name__}: {e}')
+
+    for _, r in horizon_df.iterrows():
         h, a = r.home, r.away
         if h not in m.idx or a not in m.idx:
             continue
@@ -175,7 +201,11 @@ def main():
             хозяева=en_ru.get(h, h), гости=en_ru.get(a, a), home=h, away=a,
             атака_х=round(ha, 2), оборона_х=round(hd, 2), атака_г=round(aa, 2), оборона_г=round(ad, 2),
             ож_голы_х=round(lh, 2), ож_голы_г=round(la, 2),
-            p1=round(p['H'], 4), pX=round(p['D'], 4), p2=round(p['A'], 4),
+            p1=round((elo_p.get((h, a)) or [p['H']])[0], 4),
+            pX=round((elo_p.get((h, a)) or [0, p['D']])[1], 4),
+            p2=round((elo_p.get((h, a)) or [0, 0, p['A']])[2], 4),
+            модель=('ELO на котировках + xG' if (h, a) in elo_p else 'Диксон-Коулз на xG'),
+            dc1=round(p['H'], 4), dcX=round(p['D'], 4), dc2=round(p['A'], 4),
             кэф1=None, кэфX=None, кэф2=None, рынок1=None, рынокX=None, рынок2=None,
             pin1=(round(float(pq[0]), 4) if pq is not None else None),
             pinX=(round(float(pq[1]), 4) if pq is not None else None),
@@ -323,12 +353,22 @@ def main():
         pq = None
         if all(k in pin_ml for k in ('home', 'draw', 'away')):
             pq = DEVIG['power']([pin_ml['home'], pin_ml['draw'], pin_ml['away']])
+        # В дайджест строка xG-DC идёт БЕЗ калибровки тура: калибровка
+        # подтягивает лямбды к линии Betcity, а смысл строки -- показать, что
+        # говорит чистая игра без котировок. Калиброванные lh/la остаются
+        # для анализа ставок выше. Так обе ветви (расписание и линия) пишут
+        # одну и ту же xG-DC.
+        p_raw = wdl(score_matrix(lh_raw, la_raw, m.rho))
         forecast_rows[(h, a)] = dict(
             дата=head.get('date'), время=head.get('time'), хозяева=h_ru, гости=a_ru,
             home=h, away=a,
             атака_х=round(ha, 2), оборона_х=round(hd, 2), атака_г=round(aa, 2), оборона_г=round(ad, 2),
-            ож_голы_х=round(lh, 2), ож_голы_г=round(la, 2),
-            p1=round(p['H'], 4), pX=round(p['D'], 4), p2=round(p['A'], 4),
+            ож_голы_х=round(lh_raw, 2), ож_голы_г=round(la_raw, 2),
+            p1=round((elo_p.get((h, a)) or [p_raw['H']])[0], 4),
+            pX=round((elo_p.get((h, a)) or [0, p_raw['D']])[1], 4),
+            p2=round((elo_p.get((h, a)) or [0, 0, p_raw['A']])[2], 4),
+            модель=('ELO на котировках + xG' if (h, a) in elo_p else 'Диксон-Коулз на xG'),
+            dc1=round(p_raw['H'], 4), dcX=round(p_raw['D'], 4), dc2=round(p_raw['A'], 4),
             кэф1=ml.get('1'), кэфX=ml.get('X'), кэф2=ml.get('2'),
             рынок1=(round(float(q[0]), 4) if q is not None else None),
             рынокX=(round(float(q[1]), 4) if q is not None else None),
