@@ -353,14 +353,22 @@ def find_value(quotes, consensus, pin_fair=None, theta=THETA, bettable=BETTABLE)
         # в сигнал просочится ровно та ошибка, ради которой фильтр и заводился.
         ev_worst = min(ev_by.values()) if ev_by else ev
         robust = bool(ev_by)
+        # ЭТАЛОН PINNACLE ОБЯЗАТЕЛЕН. Единственный сигнал тура 5 (Хор-Факкан П1
+        # @2.82, 11 сентября 2026) ушёл в те часы, когда Pinnacle отвечал 403:
+        # консенсус, набранный из агрегаторов, отставал от прямых контор на
+        # ~10 минут, и «перевес» был его запаздыванием. Через 7 минут та же
+        # цена стоила -6%. Сама стратегия (Buchdahl) -- цена мягкой конторы
+        # выше справедливой ОСТРОЙ; консенсус лишь подтверждает, что это не
+        # артефакт метода. Нет цены Pinnacle на исход -- нет сигнала.
+        ev_pin = (price * pf - 1.0) if pf is not None else None
         out.append(dict(
             home=h, away=a, sel=sel, price=price, book=book, kickoff=ko.get((h, a)),
             p_fair=p_fair, fair_price=1.0 / p_fair, ev=ev, ev_worst=ev_worst,
             ev_by=ev_by, ref=src,
             n_books=(c['n'] if c else 0),
             spread=(c['spread'] if c else None),
-            p_cons=(c['p'] if c else None), p_pin=pf,
-            hit=(robust and ev_worst > theta)))
+            p_cons=(c['p'] if c else None), p_pin=pf, ev_pin=ev_pin,
+            hit=(robust and ev_pin is not None and ev_pin > theta and ev_worst > theta)))
     return sorted(out, key=lambda r: -r['ev_worst'])
 
 
@@ -396,6 +404,10 @@ def pinnacle_fair():
     try:
         import pinnacle
         games = pinnacle.parse()
+        st = pinnacle.status()
+        if st.get('stale'):
+            print(f"  Pinnacle: устаревший разбор ({st['age_s']/60:.0f} мин), "
+                  f"блокировка ещё {st['blocked_s']:.0f} с", file=sys.stderr)
     except Exception as e:
         print(f'  Pinnacle недоступен: {type(e).__name__}: {e}', file=sys.stderr)
         return {}

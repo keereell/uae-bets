@@ -10,14 +10,35 @@ Pinnacle — эталон остроты линии: минимальная ма
 API публичное (используется самим сайтом Pinnacle), ключ статический.
 Цены приходят в АМЕРИКАНСКОМ формате, period=0 — полный матч.
 """
-import json, os, sys, urllib.request
+import json, os, sys, time, urllib.error, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, 'data', 'raw')
 API = 'https://guest.api.arcadia.pinnacle.com/0.1'
 KEY = 'CmX2KcMrXuFmNg6YFbmTxE0y9CIrOi0R'
 LEAGUE = 8126  # UAE - Pro League
-HDRS = {'User-Agent': 'Mozilla/5.0', 'X-API-Key': KEY, 'Accept': 'application/json'}
+HDRS = {'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                       '(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'),
+        'X-API-Key': KEY, 'Accept': 'application/json',
+        'Origin': 'https://www.pinnacle.com', 'Referer': 'https://www.pinnacle.com/'}
+
+# КЭШ И БЭКОФФ. Опрос дёргал parse() каждые 3 минуты -- два запроса за проход,
+# ~40 в час с одного IP раннера GitHub. 11 сентября 2026 гостевой API отвечал
+# 403 с 13:14 до 17:59, эталон был пуст, и единственный сигнал за весь тур
+# ушёл против одного консенсуса -- ложный. Как эталон Pinnacle не нуждается
+# в трёхминутной свежести: держим разбор 10 минут, при 403/429 ждём с
+# удвоением паузы и отдаём последний удачный разбор, пока ему меньше 30 минут.
+CACHE_TTL = 600          # секунд, сколько живёт удачный разбор
+STALE_MAX = 1800         # секунд, до какого возраста разбор ещё годится при блокировке
+_cache = dict(at=0.0, games=None, blocked_until=0.0, backoff=60.0)
+
+
+def status():
+    """Возраст последнего удачного разбора и состояние блокировки -- для логов."""
+    now = time.time()
+    return dict(age_s=(now - _cache['at']) if _cache['games'] is not None else None,
+                stale=(_cache['games'] is not None and now - _cache['at'] > CACHE_TTL),
+                blocked_s=max(0.0, _cache['blocked_until'] - now))
 
 
 def get(url):
@@ -44,8 +65,36 @@ def load(cache=True):
     return m, k
 
 
-def parse(period=0):
-    """-> {matchup_id: {'home','away','start','moneyline','totals','spreads'}}"""
+def parse(period=0, max_age=CACHE_TTL):
+    """
+    -> {matchup_id: {'home','away','start','moneyline','totals','spreads'}}
+
+    Свежий разбор моложе max_age отдаётся из памяти без запросов. При
+    HTTP 403/429 поднимается пауза (60 с, далее удвоение до 30 мин) и
+    возвращается последний удачный разбор, если ему меньше STALE_MAX;
+    иначе исключение летит наверх -- пустой эталон честнее устаревшего.
+    """
+    now = time.time()
+    if _cache['games'] is not None and now - _cache['at'] <= max_age:
+        return _cache['games']
+    if now < _cache['blocked_until']:
+        if _cache['games'] is not None and now - _cache['at'] <= STALE_MAX:
+            return _cache['games']
+        raise RuntimeError(f"Pinnacle заблокирован ещё {_cache['blocked_until']-now:.0f} с")
+    try:
+        games = _parse_live(period)
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 429):
+            _cache['blocked_until'] = now + _cache['backoff']
+            _cache['backoff'] = min(_cache['backoff'] * 2, 1800.0)
+            if _cache['games'] is not None and now - _cache['at'] <= STALE_MAX:
+                return _cache['games']
+        raise
+    _cache.update(at=now, games=games, backoff=60.0, blocked_until=0.0)
+    return games
+
+
+def _parse_live(period=0):
     matchups, markets = load(cache=False)
     games = {}
     for x in matchups:

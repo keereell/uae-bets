@@ -206,6 +206,29 @@ def git_commit(msg):
         print(f'  коммит не прошёл: {type(e).__name__}: {e}', file=sys.stderr)
     return False
 
+# Сколько проходов подряд сигнал обязан продержаться до отправки. Окно
+# Хор-Факкан П1 11 сентября жило два прохода (13:14, 13:19) и было
+# запаздыванием эталона, а не ценой конторы. Один снимок -- это ещё не окно.
+PERSIST = 2
+_streak = {}
+
+
+def _persistent(hits):
+    """Оставить только сигналы, замеченные PERSIST проходов подряд."""
+    keys = set()
+    out = []
+    for v in hits:
+        k = (v['home'], v['away'], v['sel'], v['book'])
+        keys.add(k)
+        _streak[k] = _streak.get(k, 0) + 1
+        if _streak[k] >= PERSIST:
+            out.append(v)
+    for k in list(_streak):
+        if k not in keys:
+            del _streak[k]
+    return out
+
+
 def one_pass(send=False, verbose=True):
     quotes, errs = fetch_all(verbose=verbose)
     if not quotes:
@@ -217,7 +240,7 @@ def one_pass(send=False, verbose=True):
     hits = [v for v in val if v['hit']]
     n_books = len({q.book for q in quotes if q.book in BETTABLE})
     save_snapshot(quotes, errs)
-    n_sent = notify(hits, send)
+    n_sent = notify(_persistent(hits), send)
     if verbose:
         best = f"{100*val[0]['ev']:+.2f}%" if val else '—'
         print(f'  котировок {len(quotes)}, контор для ставки {n_books}, '
