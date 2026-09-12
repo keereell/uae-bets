@@ -138,6 +138,73 @@ def main():
             # погрешность производного рынка.
             sharp_alt[key] = fit_from_constraints(c, fix_rho=0.0)
 
+    # ---------- ПРОГНОЗ ПО РАСПИСАНИЮ, до всякой линии
+    # Прогноз -- свойство модели и календаря, а не букмекера. Раньше он
+    # существовал только для матчей, на которые БЕТСИТИ уже выставила линию,
+    # и между турами (линии нет) пользователь не видел ничего -- бот молчал
+    # неделями. Здесь прогноз строится по расписанию 365scores на ближайшие
+    # 8 дней сразу; цены, когда появятся, дописываются в проходе ниже.
+    from teams import RU_TO_EN
+    en_ru = {}
+    for _ru, _en in RU_TO_EN.items():
+        en_ru.setdefault(_en, _ru)
+    forecast_rows = {}
+    _now = time.time()
+    # Горизонт прогноза, дней. 8 -- чтобы дайджест приходил за неделю до тура,
+    # когда составы и линии уже осмысленны; переопределяется переменной
+    # окружения FORECAST_HORIZON_DAYS (нужно для проверок в паузе календаря).
+    _horizon = float(os.environ.get('FORECAST_HORIZON_DAYS', 8))
+    for _, r in up[(up.ts > _now - 3600) & (up.ts <= _now + _horizon * 86400)].iterrows():
+        h, a = r.home, r.away
+        if h not in m.idx or a not in m.idx:
+            continue
+        lh0, la0 = m.lambdas(h, a)
+        x, y = apply_shrink(np.array([lh0]), np.array([la0]),
+                            cal['k_s'], cal['k_d'], cal['c'], cal['s_mean'])
+        lh, la = float(x[0]), float(y[0])
+        p = wdl(score_matrix(lh, la, m.rho))
+        ha, hd = team_rates(m, h)
+        aa, ad = team_rates(m, a)
+        pin_ml = (pin_raw.get((h, a)) or {}).get('moneyline') or {}
+        pq = (DEVIG['power']([pin_ml['home'], pin_ml['draw'], pin_ml['away']])
+              if all(k in pin_ml for k in ('home', 'draw', 'away')) else None)
+        kh = float(r.kickoff_hour) if pd.notna(r.kickoff_hour) else None
+        forecast_rows[(h, a)] = dict(
+            дата=str(r.date),
+            время=(f'{int(kh):02d}:{int(round((kh % 1) * 60)):02d}' if kh is not None else ''),
+            хозяева=en_ru.get(h, h), гости=en_ru.get(a, a), home=h, away=a,
+            атака_х=round(ha, 2), оборона_х=round(hd, 2), атака_г=round(aa, 2), оборона_г=round(ad, 2),
+            ож_голы_х=round(lh, 2), ож_голы_г=round(la, 2),
+            p1=round(p['H'], 4), pX=round(p['D'], 4), p2=round(p['A'], 4),
+            кэф1=None, кэфX=None, кэф2=None, рынок1=None, рынокX=None, рынок2=None,
+            pin1=(round(float(pq[0]), 4) if pq is not None else None),
+            pinX=(round(float(pq[1]), 4) if pq is not None else None),
+            pin2=(round(float(pq[2]), 4) if pq is not None else None))
+
+    def _write_forecast():
+        import json
+        fc_path = os.path.join(ROOT, 'data', 'forecast.csv')
+        if forecast_rows:
+            pd.DataFrame(list(forecast_rows.values())).to_csv(
+                fc_path, index=False, encoding='utf-8-sig')
+            print(f'Прогноз по {len(forecast_rows)} матчам: data/forecast.csv')
+        else:
+            # Пустой горизонт -- тоже информация. Лига берёт паузы на месяц
+            # (сентябрь-октябрь 2026: 34 дня между турами), и молчание бота
+            # в это время неотличимо от поломки. Оставляем дату ближайшего
+            # тура, чтобы бот мог один раз об этом сказать.
+            if os.path.exists(fc_path):
+                os.remove(fc_path)
+            nxt = up[up.ts > _now]
+            info = dict(next_date=(str(nxt.date.min()) if not nxt.empty else None),
+                        n_matches=int((nxt.date == nxt.date.min()).sum()) if not nxt.empty else 0,
+                        round=(str(nxt.iloc[0]['round']) if not nxt.empty else None))
+            json.dump(info, open(os.path.join(ROOT, 'data', 'next_round.json'), 'w',
+                                 encoding='utf-8'), ensure_ascii=False)
+            print(f"Предстоящих матчей в ближайшие {_horizon:g} дней нет; ближайший тур "
+                  f"{info['next_date']} ({info['n_matches']} матчей).")
+    _write_forecast()
+
     # ---------- ПРОХОД 1: калибровка тура
     pages = load_all()
 
@@ -241,11 +308,35 @@ def main():
               f'(до калибровки тура было {lh_raw:.2f}:{la_raw:.2f}; '
               f'поправки без участия этого матча {_dmu:+.4f}/{_dgam:+.4f}).')
 
+        q = None
         if all(k in ml for k in ('1', 'X', '2')):
             o = [ml['1'], ml['X'], ml['2']]
             q = DEVIG['power'](o)
             print(f'Линия. {o[0]:.2f} / {o[1]:.2f} / {o[2]:.2f}, маржа {100*margin(o):.1f}%. '
                   f'Рынок даёт хозяевам {100*q[0]:.1f}%, модель {100*p["H"]:.1f}%.')
+
+        # Прогноз матча сохраняется ВСЕГДА. Раньше в файл попадали только
+        # кандидаты на ставку, и когда их не было (то есть почти всегда),
+        # пользователь не видел прогноз вовсе -- бот молчал.
+        pin_g = pin_raw.get((h, a)) or {}
+        pin_ml = pin_g.get('moneyline') or {}
+        pq = None
+        if all(k in pin_ml for k in ('home', 'draw', 'away')):
+            pq = DEVIG['power']([pin_ml['home'], pin_ml['draw'], pin_ml['away']])
+        forecast_rows[(h, a)] = dict(
+            дата=head.get('date'), время=head.get('time'), хозяева=h_ru, гости=a_ru,
+            home=h, away=a,
+            атака_х=round(ha, 2), оборона_х=round(hd, 2), атака_г=round(aa, 2), оборона_г=round(ad, 2),
+            ож_голы_х=round(lh, 2), ож_голы_г=round(la, 2),
+            p1=round(p['H'], 4), pX=round(p['D'], 4), p2=round(p['A'], 4),
+            кэф1=ml.get('1'), кэфX=ml.get('X'), кэф2=ml.get('2'),
+            рынок1=(round(float(q[0]), 4) if q is not None else None),
+            рынокX=(round(float(q[1]), 4) if q is not None else None),
+            рынок2=(round(float(q[2]), 4) if q is not None else None),
+            pin1=(round(float(pq[0]), 4) if pq is not None else None),
+            pinX=(round(float(pq[1]), 4) if pq is not None else None),
+            pin2=(round(float(pq[2]), 4) if pq is not None else None),
+        )
 
         # ---- собираем все исходы
         mr = list(brows)
@@ -382,6 +473,7 @@ def main():
     print('\n' + '#' * 104)
     print('ИТОГ ТУРА'.center(104))
     print('#' * 104)
+    _write_forecast()
     if not picks:
         print('\nНи одной ставки в коридоре.')
         return
