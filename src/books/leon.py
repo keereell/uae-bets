@@ -61,6 +61,7 @@ sel_eh. Расщеплять четверти (0.25/0.75) здесь нельз�
     PYTHONIOENCODING=utf-8 python src/books/leon.py
 """
 import json
+import requests
 import os
 import sys
 import time
@@ -121,23 +122,35 @@ _1X2_TAGS = {'HOME': '1', 'DRAW': 'X', 'AWAY': '2'}
 # ---------------------------------------------------------------------------
 #                                   СЕТЬ
 # ---------------------------------------------------------------------------
+# Один Session на процесс. Leon отвечает 307 НА САМОГО СЕБЯ и выставляет
+# куки spid/spsc: клиент без cookie-jar (urllib) уходит в бесконечный
+# редирект, с cookie-jar второй запрос проходит. 11-12 сентября 2026
+# адаптер из-за этого выпадал целиком. Session заодно хранит куки между
+# проходами опроса -- рукопожатие делается один раз за прогон.
+_SESSION = None
+
+
+def _session():
+    global _SESSION
+    if _SESSION is None:
+        _SESSION = requests.Session()
+        _SESSION.headers.update(HDRS)
+    return _SESSION
+
+
 def _get(url, tries=3, timeout=30):
-    """
-    GET + JSON с ретраями. Сетевую ошибку НЕ глушим: после последней попытки
-    исключение летит наверх, его ловит books.fetch_book и покажет как ошибку
-    конторы. Молча вернуть пустой список тут -- худшее, что можно сделать:
-    сборщик решит, что Leon просто не котирует лигу.
-    """
+    """GET + json через Session с cookie-jar. Сетевые ошибки не глушим."""
+    last = None
     for i in range(tries):
         try:
-            req = urllib.request.Request(url, headers=HDRS)
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return json.loads(r.read().decode('utf-8'))
-        except Exception:
-            if i == tries - 1:
-                raise
-            time.sleep(1.5 * (i + 1))
-
+            r = _session().get(url, timeout=timeout, allow_redirects=True)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:      # noqa: BLE001 -- ретраим любую сетевую беду
+            last = e
+            if i < tries - 1:
+                time.sleep(1.5 * (i + 1))
+    raise last
 
 def _events_url(league_id):
     return (f'{API}/events/all?ctag=ru-RU&league_id={league_id}'

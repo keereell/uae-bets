@@ -185,6 +185,11 @@ def _chunks(seq, n):
 def fetch():
     """-> list[Quote] по лиге ОАЭ. Пустой список = Зенит сейчас не котирует лигу."""
     data = _get(_LINE.format(league=LEAGUE_ID, cv=CLIENT_V))
+    # Между турами эндпоинт отвечает 200 с телом null: лиги в меню нет вовсе
+    # (резолвер по «ОАЭ» ничего не находит). Это пустая линия, а не ошибка --
+    # 12 сентября 2026 адаптер на этом падал с AttributeError.
+    if not isinstance(data, dict):
+        return []
     games = data.get('games') or {}
     if not games:
         return []
