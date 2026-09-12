@@ -40,6 +40,11 @@ from consensus import (build_consensus, find_value, pinnacle_fair,
                        save_snapshot, THETA, SNAPSHOT_DIR)          # noqa: E402
 
 STATE_SENT = os.path.join(ROOT, 'data', 'sent_value.json')
+# Журнал ОТПРАВЛЕННЫХ сигналов ценового пути. В bets_log.csv пишет только
+# xG-путь (clv.py), и первый настоящий сигнал (Хор-Факкан П1 @2.82, 11 сентября
+# 2026) нигде не остался -- CLV по нему было не посчитать. Закрывающая цена
+# берётся не живым запросом, а из снимков: последний снимок до начала матча.
+SIGNALS = os.path.join(ROOT, 'data', 'price_signals.csv')
 INTERVAL = 180.0          # секунд между проверками
 COMMIT_EVERY = 20         # снимков между коммитами (~1 час)
 
@@ -131,7 +136,24 @@ def notify(hits, send):
         sent[k] = dict(ev=float(v['ev']), price=float(v['price']), book=v['book'],
                        ko=float(v.get('kickoff') or now), at=stamp)
     _save_sent(sent)
+    _log_signals(fresh, stamp)
     return len(fresh)
+
+
+def _log_signals(fresh, stamp):
+    import csv
+    new = not os.path.exists(SIGNALS)
+    with open(SIGNALS, 'a', newline='', encoding='utf-8-sig') as f:
+        w = csv.writer(f)
+        if new:
+            w.writerow(['sent_at', 'home', 'away', 'sel', 'book', 'price', 'fair_price',
+                        'p_fair', 'ev', 'ev_worst', 'ref', 'n_books', 'kickoff'])
+        for _, v in fresh:
+            ko = v.get('kickoff')
+            w.writerow([stamp, v['home'], v['away'], v['sel'], v['book'],
+                        f"{v['price']:.3f}", f"{v['fair_price']:.4f}", f"{v['p_fair']:.5f}",
+                        f"{v['ev']:.5f}", f"{v['ev_worst']:.5f}", v['ref'], v['n_books'],
+                        dt.datetime.fromtimestamp(ko, dt.timezone.utc).strftime('%Y-%m-%dT%H:%MZ') if ko else ''])
 
 def git_commit(msg):
     """
@@ -144,7 +166,7 @@ def git_commit(msg):
     коммиты прогона пропадали. Каждая неудача печатается.
     -> True если отправлено (или нечего было), False если нет.
     """
-    files = ['data/snapshots', 'data/sent_value.json']
+    files = ['data/snapshots', 'data/sent_value.json', 'data/price_signals.csv']
     try:
         staged = 0
         for f in files:
@@ -220,6 +242,7 @@ def main():
     i = 0
     total_hits = 0
     commit_failed = False
+    empty_streak = 0
     while True:
         i += 1
         t0 = time.time()
@@ -230,6 +253,15 @@ def main():
         except Exception as e:
             print(f'  проход упал: {type(e).__name__}: {e}', file=sys.stderr)
             quotes = None
+        # Пусто три прохода подряд -- значит, все предстоящие матчи уже
+        # начались (их отсекает fetch_all), а следующих с линией ещё нет.
+        # 11 сентября 2026 прогон в таком состоянии крутился 5.5 часов и
+        # плодил копии. Один-два пустых прохода могут быть сетевым сбоем,
+        # три подряд -- нет. Строка ниже -- сигнал воркфлоу не запускать копию.
+        empty_streak = empty_streak + 1 if not quotes else 0
+        if a.minutes > 0 and empty_streak >= 3:
+            print('  ближайшие 72 часа матчей нет, выхожу')
+            break
 
         if a.commit and i % COMMIT_EVERY == 0:
             if not git_commit(f'снимки линий {dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ} [skip ci]'):
