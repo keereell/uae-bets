@@ -137,10 +137,8 @@
  "runs": 83,
  "watch": {
   "fixtures": {
-   "4820627": "Khor Fakkan — Baniyas",
-   "4820628": "Hatta Club — Al Dhafra",
-   "4820625": "Ajman Club — Kalba",
-   "4820629": "Al-Wahda — Sharjah SC"
+   "4851246": "Al Dhafra — Dubai United",
+   "4851245": "Baniyas — Al Wasl"
   },
   "betcity": {
    "Хаур-Факкан — Банияс": {
@@ -214,7 +212,7 @@
     "draw": 4.01
    }
   },
-  "checked_at": "2026-09-24T23:56Z"
+  "checked_at": "2026-09-25T00:33Z"
  },
  "pause_notice": "2026-10-16"
 }
