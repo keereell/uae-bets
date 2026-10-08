@@ -143,7 +143,8 @@
    "4851243": "Shabab Al Ahly — Al Ain",
    "4851241": "Kalba — Jazira Abu Dhabi",
    "4851242": "Khor Fakkan — Al-Wahda",
-   "4851240": "Ajman Club — Sharjah SC"
+   "4851240": "Ajman Club — Sharjah SC",
+   "4866922": "Al Ain — Ajman Club"
   },
   "betcity": {
    "Хаур-Факкан — Банияс": {
@@ -217,7 +218,7 @@
     "draw": 4.01
    }
   },
-  "checked_at": "2026-10-07T22:35Z"
+  "checked_at": "2026-10-08T01:55Z"
  },
  "pause_notice": "2026-10-16"
 }
