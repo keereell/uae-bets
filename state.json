@@ -133,8 +133,8 @@
    "at": "2026-09-11T06:00Z"
   }
  },
- "last_run": "2026-10-09T02:10Z",
- "runs": 115,
+ "last_run": "2026-10-09T16:11Z",
+ "runs": 116,
  "watch": {
   "fixtures": {
    "4851246": "Al Dhafra — Dubai United",
@@ -224,6 +224,6 @@
   "checked_at": "2026-10-09T15:54Z"
  },
  "pause_notice": "2026-10-16",
- "forecast_key": "2026-10-16:Al Dhafra-Dubai United|2026-10-16:Baniyas-Al Wasl",
- "forecast_at": "2026-10-08T16:27Z"
+ "forecast_key": "2026-10-16:Al Dhafra-Dubai United|2026-10-16:Baniyas-Al Wasl|2026-10-17:Al Nasr Dubai-Hatta Club|2026-10-17:Shabab Al Ahly-Al Ain",
+ "forecast_at": "2026-10-09T16:11Z"
 }
