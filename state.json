@@ -144,7 +144,10 @@
    "4851241": "Kalba — Jazira Abu Dhabi",
    "4851242": "Khor Fakkan — Al-Wahda",
    "4851240": "Ajman Club — Sharjah SC",
-   "4866922": "Al Ain — Ajman Club"
+   "4866922": "Al Ain — Ajman Club",
+   "4866920": "Al Wasl — Al Dhafra",
+   "4866921": "Dubai United — Khor Fakkan",
+   "4866919": "Shabab Al Ahly — Kalba"
   },
   "betcity": {
    "Хаур-Факкан — Банияс": {
@@ -218,7 +221,7 @@
     "draw": 4.01
    }
   },
-  "checked_at": "2026-10-08T22:47Z"
+  "checked_at": "2026-10-09T02:09Z"
  },
  "pause_notice": "2026-10-16",
  "forecast_key": "2026-10-16:Al Dhafra-Dubai United|2026-10-16:Baniyas-Al Wasl",
