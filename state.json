@@ -114,23 +114,23 @@
    }
   },
   "pinnacle": {
-   "Khor Fakkan Club — Al Wahda": {
-    "home": 5.25,
-    "away": 1.5813953488372094,
-    "draw": 4.18
+   "Ajman — Sharjah FC": {
+    "home": 3.33,
+    "away": 2.09,
+    "draw": 3.61
    },
    "Al Ittihad Kalba — Al Jazira": {
     "home": 5.39,
     "away": 1.5235602094240837,
     "draw": 4.54
    },
-   "Ajman — Sharjah FC": {
-    "home": 3.33,
-    "away": 2.09,
-    "draw": 3.61
+   "Khor Fakkan Club — Al Wahda": {
+    "home": 5.25,
+    "away": 1.5813953488372094,
+    "draw": 4.18
    }
   },
-  "checked_at": "2026-10-17T18:24Z"
+  "checked_at": "2026-10-17T20:00Z"
  },
  "pause_notice": "2026-10-16",
  "forecast_key": "2026-10-17:Shabab Al Ahly-Al Ain|2026-10-18:Ajman Club-Sharjah SC|2026-10-18:Kalba-Jazira Abu Dhabi|2026-10-18:Khor Fakkan-Al-Wahda",
