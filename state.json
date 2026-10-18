@@ -59,8 +59,6 @@
  "runs": 150,
  "watch": {
   "fixtures": {
-   "4851244": "Al Nasr Dubai — Hatta Club",
-   "4851243": "Shabab Al Ahly — Al Ain",
    "4851241": "Kalba — Jazira Abu Dhabi",
    "4851242": "Khor Fakkan — Al-Wahda",
    "4851240": "Ajman Club — Sharjah SC",
@@ -73,7 +71,11 @@
    "4866917": "Jazira Abu Dhabi — Baniyas",
    "4866915": "Al Dhafra — Kalba",
    "4866913": "Sharjah SC — Shabab Al Ahly",
-   "4866914": "Hatta Club — Khor Fakkan"
+   "4866914": "Hatta Club — Khor Fakkan",
+   "4866911": "Jazira Abu Dhabi — Al Wasl",
+   "4866912": "Al Nasr Dubai — Dubai United",
+   "4866909": "Al-Wahda — Al Ain",
+   "4866910": "Ajman Club — Baniyas"
   },
   "betcity": {
    "Аль-Иттихад Калба — Аль-Джазира": {
@@ -114,11 +116,6 @@
    }
   },
   "pinnacle": {
-   "Al Ittihad Kalba — Al Jazira": {
-    "home": 5.39,
-    "away": 1.5235602094240837,
-    "draw": 4.54
-   },
    "Khor Fakkan Club — Al Wahda": {
     "home": 5.25,
     "away": 1.5813953488372094,
@@ -128,9 +125,14 @@
     "home": 3.33,
     "away": 2.08,
     "draw": 3.63
+   },
+   "Al Ittihad Kalba — Al Jazira": {
+    "home": 5.39,
+    "away": 1.5235602094240837,
+    "draw": 4.54
    }
   },
-  "checked_at": "2026-10-17T22:30Z"
+  "checked_at": "2026-10-18T00:03Z"
  },
  "pause_notice": "2026-10-16",
  "forecast_key": "2026-10-17:Shabab Al Ahly-Al Ain|2026-10-18:Ajman Club-Sharjah SC|2026-10-18:Kalba-Jazira Abu Dhabi|2026-10-18:Khor Fakkan-Al-Wahda",
