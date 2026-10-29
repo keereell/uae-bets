@@ -67,8 +67,8 @@
    "at": "2026-10-18T13:04Z"
   }
  },
- "last_run": "2026-10-29T01:48Z",
- "runs": 177,
+ "last_run": "2026-10-29T16:07Z",
+ "runs": 178,
  "watch": {
   "fixtures": {
    "4866922": "Al Ain — Ajman Club",
@@ -136,6 +136,6 @@
   "checked_at": "2026-10-29T15:55Z"
  },
  "pause_notice": "2026-10-29",
- "forecast_key": "2026-10-29:Al Ain-Ajman Club|2026-10-30:Al Wasl-Al Dhafra|2026-10-30:Dubai United-Khor Fakkan|2026-10-30:Shabab Al Ahly-Kalba|2026-11-01:Al-Wahda-Hatta Club|2026-11-01:Jazira Abu Dhabi-Baniyas|2026-11-01:Sharjah SC-Al Nasr Dubai",
- "forecast_at": "2026-10-24T16:15Z"
+ "forecast_key": "2026-10-30:Al Wasl-Al Dhafra|2026-10-30:Dubai United-Khor Fakkan|2026-10-30:Shabab Al Ahly-Kalba|2026-11-01:Al-Wahda-Hatta Club|2026-11-01:Jazira Abu Dhabi-Baniyas|2026-11-01:Sharjah SC-Al Nasr Dubai",
+ "forecast_at": "2026-10-29T16:07Z"
 }
