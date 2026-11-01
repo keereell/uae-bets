@@ -221,36 +221,70 @@
     "Двойной исход|X2": 1.61,
     "Двойной исход|12": 1.26,
     "Двойной исход|1X": 1.34
+   },
+   "Аджман — Банияс": {
+    "Двойной исход|X2": 1.7,
+    "Двойной исход|12": 1.22,
+    "Двойной исход|1X": 1.32,
+    "Фактический исход|P1": 2.03,
+    "Фактический исход|P2": 3.1,
+    "Фактический исход|X": 3.8,
+    "Фора|Kf_F1": 1.52,
+    "Фора|Kf_F2": 2.36,
+    "Тотал|Tm": 2.23,
+    "Тотал|Tb": 1.58
+   },
+   "Аль-Вахда Абу-Даби — Аль-Айн": {
+    "Фактический исход|P1": 4.7,
+    "Фактический исход|P2": 1.6,
+    "Фактический исход|X": 4.1,
+    "Фора|Kf_F1": 3.6,
+    "Фора|Kf_F2": 1.24,
+    "Тотал|Tm": 2.08,
+    "Тотал|Tb": 1.67,
+    "Двойной исход|X2": 1.15,
+    "Двойной исход|12": 1.19,
+    "Двойной исход|1X": 2.2
    }
   },
   "pinnacle": {
-   "Hatta — Khor Fakkan Club": {
-    "home": 3.14,
-    "away": 2.12,
-    "draw": 3.68
-   },
    "Sharjah FC — Shabab Al Ahli": {
     "home": 2.9,
     "away": 2.24,
     "draw": 3.73
    },
-   "Al Dhafra — Al Ittihad Kalba": {
-    "home": 2.8899999999999997,
-    "away": 2.2199999999999998,
-    "draw": 3.78
+   "Hatta — Khor Fakkan Club": {
+    "home": 3.14,
+    "away": 2.12,
+    "draw": 3.68
+   },
+   "Al-Nasr Dubai — Dubai United": {
+    "home": 1.5434782608695652,
+    "away": 5.04,
+    "draw": 4.52
    },
    "Al Jazira — Al Wasl": {
     "home": 2.21,
     "away": 3.03,
     "draw": 3.6
    },
-   "Al-Nasr Dubai — Dubai United": {
-    "home": 1.5434782608695652,
-    "away": 5.04,
-    "draw": 4.52
+   "Ajman — Bani Yas": {
+    "home": 2.0700000000000003,
+    "away": 3.21,
+    "draw": 3.74
+   },
+   "Al Dhafra — Al Ittihad Kalba": {
+    "home": 2.8899999999999997,
+    "away": 2.2199999999999998,
+    "draw": 3.78
+   },
+   "Al Wahda — Al Ain": {
+    "home": 4.34,
+    "away": 1.7246376811594204,
+    "draw": 3.93
    }
   },
-  "checked_at": "2026-11-01T15:52Z"
+  "checked_at": "2026-11-01T20:19Z"
  },
  "pause_notice": "2026-10-29",
  "forecast_key": "2026-11-07:Al Dhafra-Kalba|2026-11-07:Hatta Club-Khor Fakkan|2026-11-07:Sharjah SC-Shabab Al Ahly|2026-11-08:Ajman Club-Baniyas|2026-11-08:Al Nasr Dubai-Dubai United|2026-11-08:Al-Wahda-Al Ain|2026-11-08:Jazira Abu Dhabi-Al Wasl",
