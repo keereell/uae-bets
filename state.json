@@ -151,8 +151,8 @@
    "at": "2026-11-07T15:31Z"
   }
  },
- "last_run": "2026-11-07T15:39Z",
- "runs": 208,
+ "last_run": "2026-11-07T17:52Z",
+ "runs": 209,
  "watch": {
   "fixtures": {
    "4866915": "Al Dhafra — Kalba",
@@ -255,6 +255,6 @@
   "checked_at": "2026-11-07T15:30Z"
  },
  "pause_notice": "2026-10-29",
- "forecast_key": "2026-11-07:Hatta Club-Khor Fakkan|2026-11-07:Sharjah SC-Shabab Al Ahly|2026-11-08:Ajman Club-Baniyas|2026-11-08:Al Nasr Dubai-Dubai United|2026-11-08:Al-Wahda-Al Ain|2026-11-08:Jazira Abu Dhabi-Al Wasl",
- "forecast_at": "2026-11-07T15:31Z"
+ "forecast_key": "2026-11-08:Ajman Club-Baniyas|2026-11-08:Al Nasr Dubai-Dubai United|2026-11-08:Al-Wahda-Al Ain|2026-11-08:Jazira Abu Dhabi-Al Wasl",
+ "forecast_at": "2026-11-07T17:52Z"
 }
