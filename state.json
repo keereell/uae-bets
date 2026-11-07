@@ -226,11 +226,6 @@
     "away": 1.7407407407407407,
     "draw": 4.0
    },
-   "Al-Nasr Dubai — Dubai United": {
-    "home": 1.6097560975609757,
-    "away": 4.82,
-    "draw": 4.4
-   },
    "Ajman — Bani Yas": {
     "home": 2.09,
     "away": 3.24,
@@ -240,9 +235,14 @@
     "home": 2.3600000000000003,
     "away": 2.8600000000000003,
     "draw": 3.61
+   },
+   "Al-Nasr Dubai — Dubai United": {
+    "home": 1.6097560975609757,
+    "away": 4.82,
+    "draw": 4.4
    }
   },
-  "checked_at": "2026-11-07T19:35Z"
+  "checked_at": "2026-11-07T21:22Z"
  },
  "pause_notice": "2026-10-29",
  "forecast_key": "2026-11-08:Ajman Club-Baniyas|2026-11-08:Al Nasr Dubai-Dubai United|2026-11-08:Al-Wahda-Al Ain|2026-11-08:Jazira Abu Dhabi-Al Wasl",
