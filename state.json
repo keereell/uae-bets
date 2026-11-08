@@ -157,8 +157,8 @@
    "at": "2026-11-08T11:17Z"
   }
  },
- "last_run": "2026-11-08T15:58Z",
- "runs": 212,
+ "last_run": "2026-11-08T18:05Z",
+ "runs": 213,
  "watch": {
   "fixtures": {
    "4866911": "Jazira Abu Dhabi — Al Wasl",
@@ -247,7 +247,7 @@
   },
   "checked_at": "2026-11-08T15:50Z"
  },
- "pause_notice": "2026-10-29",
+ "pause_notice": "2026-11-19",
  "forecast_key": "2026-11-08:Ajman Club-Baniyas|2026-11-08:Al-Wahda-Al Ain",
  "forecast_at": "2026-11-08T15:58Z"
 }
