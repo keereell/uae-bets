@@ -224,16 +224,6 @@
    }
   },
   "pinnacle": {
-   "Al Wahda — Al Ain": {
-    "home": 4.54,
-    "away": 1.704225352112676,
-    "draw": 4.140000000000001
-   },
-   "Ajman — Bani Yas": {
-    "home": 2.17,
-    "away": 3.13,
-    "draw": 3.79
-   },
    "Al-Nasr Dubai — Dubai United": {
     "home": 1.5405405405405406,
     "away": 5.43,
@@ -243,9 +233,19 @@
     "home": 2.42,
     "away": 2.69,
     "draw": 3.85
+   },
+   "Ajman — Bani Yas": {
+    "home": 2.17,
+    "away": 3.13,
+    "draw": 3.79
+   },
+   "Al Wahda — Al Ain": {
+    "home": 4.54,
+    "away": 1.704225352112676,
+    "draw": 4.140000000000001
    }
   },
-  "checked_at": "2026-11-08T11:16Z"
+  "checked_at": "2026-11-08T11:39Z"
  },
  "pause_notice": "2026-10-29",
  "forecast_key": "2026-11-08:Ajman Club-Baniyas|2026-11-08:Al Nasr Dubai-Dubai United|2026-11-08:Al-Wahda-Al Ain|2026-11-08:Jazira Abu Dhabi-Al Wasl",
