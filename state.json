@@ -157,8 +157,8 @@
    "at": "2026-11-08T11:17Z"
   }
  },
- "last_run": "2026-11-10T20:01Z",
- "runs": 217,
+ "last_run": "2026-11-11T17:06Z",
+ "runs": 218,
  "watch": {
   "fixtures": {
    "4866908": "Al Wasl — Hatta Club",
@@ -244,6 +244,6 @@
   "checked_at": "2026-11-11T16:57Z"
  },
  "pause_notice": "2026-11-19",
- "forecast_key": "2026-11-08:Ajman Club-Baniyas|2026-11-08:Al-Wahda-Al Ain",
- "forecast_at": "2026-11-08T15:58Z"
+ "forecast_key": "2026-11-19:Al Ain-Al Dhafra|2026-11-19:Al Wasl-Hatta Club",
+ "forecast_at": "2026-11-11T17:06Z"
 }
