@@ -167,7 +167,9 @@
    "4866905": "Shabab Al Ahly — Ajman Club",
    "4866903": "Khor Fakkan — Jazira Abu Dhabi",
    "4866904": "Baniyas — Al Nasr Dubai",
-   "4866902": "Dubai United — Al-Wahda"
+   "4866902": "Dubai United — Al-Wahda",
+   "4866901": "Al-Wahda — Al Wasl",
+   "4866900": "Jazira Abu Dhabi — Al Ain"
   },
   "betcity": {
    "Аль-Наср Дубай — Дубай Юнайтед": {
@@ -241,7 +243,7 @@
     "draw": 4.140000000000001
    }
   },
-  "checked_at": "2026-11-11T23:59Z"
+  "checked_at": "2026-11-12T02:59Z"
  },
  "pause_notice": "2026-11-19",
  "forecast_key": "2026-11-19:Al Ain-Al Dhafra|2026-11-19:Al Wasl-Hatta Club",
