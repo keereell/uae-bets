@@ -189,6 +189,18 @@
     "Двойной исход|X2": 2.6,
     "Двойной исход|12": 1.14,
     "Двойной исход|1X": 1.11
+   },
+   "Аль-Иттихад Калба — Аль-Шарджа": {
+    "Фактический исход|P1": 4.2,
+    "Фактический исход|P2": 1.72,
+    "Фактический исход|X": 3.8,
+    "Фора|Kf_F1": 3.2,
+    "Фора|Kf_F2": 1.3,
+    "Тотал|Tm": 1.93,
+    "Тотал|Tb": 1.77,
+    "Двойной исход|X2": 1.19,
+    "Двойной исход|12": 1.22,
+    "Двойной исход|1X": 2.0
    }
   },
   "pinnacle": {
@@ -197,18 +209,23 @@
     "away": 13.89,
     "draw": 8.969999999999999
    },
+   "Al Ittihad Kalba — Sharjah FC": {
+    "home": 4.4,
+    "away": 1.7352941176470589,
+    "draw": 3.83
+   },
+   "Shabab Al Ahli — Ajman": {
+    "home": 1.4545454545454546,
+    "away": 5.69,
+    "draw": 4.87
+   },
    "Al Ain — Al Dhafra": {
     "home": 1.1515151515151516,
     "away": 12.2,
     "draw": 8.26
-   },
-   "Shabab Al Ahli — Ajman": {
-    "home": 1.4424778761061947,
-    "away": 5.58,
-    "draw": 4.79
    }
   },
-  "checked_at": "2026-11-13T17:00Z"
+  "checked_at": "2026-11-13T22:30Z"
  },
  "pause_notice": "2026-11-19",
  "forecast_key": "2026-11-19:Al Ain-Al Dhafra|2026-11-19:Al Wasl-Hatta Club|2026-11-20:Kalba-Sharjah SC|2026-11-20:Shabab Al Ahly-Ajman Club|2026-11-21:Baniyas-Al Nasr Dubai|2026-11-21:Dubai United-Al-Wahda|2026-11-21:Khor Fakkan-Jazira Abu Dhabi",
