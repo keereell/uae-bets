@@ -180,18 +180,18 @@
    }
   },
   "pinnacle": {
-   "Al Ain — Al Dhafra": {
-    "home": 1.1251564455569463,
-    "away": 14.19,
-    "draw": 9.11
-   },
    "Al Wasl — Hatta": {
     "home": 1.1288659793814433,
     "away": 13.89,
     "draw": 8.969999999999999
+   },
+   "Al Ain — Al Dhafra": {
+    "home": 1.1515151515151516,
+    "away": 12.2,
+    "draw": 8.26
    }
   },
-  "checked_at": "2026-11-13T02:38Z"
+  "checked_at": "2026-11-13T12:12Z"
  },
  "pause_notice": "2026-11-19",
  "forecast_key": "2026-11-19:Al Ain-Al Dhafra|2026-11-19:Al Wasl-Hatta Club|2026-11-20:Kalba-Sharjah SC|2026-11-20:Shabab Al Ahly-Ajman Club",
