@@ -179,12 +179,12 @@
   "betcity": {
    "Аль-Васл Дубай — Хатта": {
     "Фактический исход|P1": 1.12,
-    "Фактический исход|P2": 14.5,
-    "Фактический исход|X": 8.4,
-    "Фора|Kf_F1": 1.66,
-    "Фора|Kf_F2": 2.1,
-    "Тотал|Tm": 1.92,
-    "Тотал|Tb": 1.79,
+    "Фактический исход|P2": 14.0,
+    "Фактический исход|X": 8.6,
+    "Фора|Kf_F1": 2.0,
+    "Фора|Kf_F2": 1.72,
+    "Тотал|Tm": 2.14,
+    "Тотал|Tb": 1.63,
     "Двойной исход|X2": 5.3,
     "Двойной исход|12": 1.04
    },
@@ -262,9 +262,9 @@
   },
   "pinnacle": {
    "Al Wasl — Hatta": {
-    "home": 1.1288659793814433,
-    "away": 13.89,
-    "draw": 8.969999999999999
+    "home": 1.1270648030495554,
+    "away": 14.0,
+    "draw": 9.05
    },
    "Al Ittihad Kalba — Sharjah FC": {
     "home": 4.4,
@@ -276,20 +276,20 @@
     "away": 1.6993006993006992,
     "draw": 4.07
    },
+   "Bani Yas — Al-Nasr Dubai": {
+    "home": 3.93,
+    "away": 1.7462686567164178,
+    "draw": 4.18
+   },
    "Al Ain — Al Dhafra": {
-    "home": 1.1453488372093024,
-    "away": 12.61,
-    "draw": 8.43
+    "home": 1.143266475644699,
+    "away": 12.78,
+    "draw": 8.49
    },
    "Shabab Al Ahli — Ajman": {
     "home": 1.4545454545454546,
     "away": 5.69,
     "draw": 4.87
-   },
-   "Bani Yas — Al-Nasr Dubai": {
-    "home": 3.93,
-    "away": 1.7462686567164178,
-    "draw": 4.18
    },
    "Khor Fakkan Club — Al Jazira": {
     "home": 7.94,
@@ -297,7 +297,7 @@
     "draw": 5.38
    }
   },
-  "checked_at": "2026-11-15T22:25Z"
+  "checked_at": "2026-11-16T02:06Z"
  },
  "pause_notice": "2026-11-19",
  "forecast_key": "2026-11-19:Al Ain-Al Dhafra|2026-11-19:Al Wasl-Hatta Club|2026-11-20:Kalba-Sharjah SC|2026-11-20:Shabab Al Ahly-Ajman Club|2026-11-21:Baniyas-Al Nasr Dubai|2026-11-21:Dubai United-Al-Wahda|2026-11-21:Khor Fakkan-Jazira Abu Dhabi",
