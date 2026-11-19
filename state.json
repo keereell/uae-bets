@@ -139,8 +139,8 @@
    "at": "2026-11-19T13:07Z"
   }
  },
- "last_run": "2026-11-19T13:07Z",
- "runs": 247,
+ "last_run": "2026-11-19T18:03Z",
+ "runs": 248,
  "watch": {
   "fixtures": {
    "4866908": "Al Wasl — Hatta Club",
@@ -251,6 +251,6 @@
   "checked_at": "2026-11-19T18:02Z"
  },
  "pause_notice": "2026-11-19",
- "forecast_key": "2026-11-19:Al Ain-Al Dhafra|2026-11-19:Al Wasl-Hatta Club|2026-11-20:Kalba-Sharjah SC|2026-11-20:Shabab Al Ahly-Ajman Club|2026-11-21:Baniyas-Al Nasr Dubai|2026-11-21:Dubai United-Al-Wahda|2026-11-21:Khor Fakkan-Jazira Abu Dhabi",
- "forecast_at": "2026-11-13T17:01Z"
+ "forecast_key": "2026-11-20:Kalba-Sharjah SC|2026-11-20:Shabab Al Ahly-Ajman Club|2026-11-21:Baniyas-Al Nasr Dubai|2026-11-21:Dubai United-Al-Wahda|2026-11-21:Khor Fakkan-Jazira Abu Dhabi",
+ "forecast_at": "2026-11-19T18:03Z"
 }
