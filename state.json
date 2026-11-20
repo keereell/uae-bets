@@ -139,8 +139,8 @@
    "at": "2026-11-19T13:07Z"
   }
  },
- "last_run": "2026-11-20T13:48Z",
- "runs": 253,
+ "last_run": "2026-11-20T17:40Z",
+ "runs": 254,
  "watch": {
   "fixtures": {
    "4866907": "Kalba — Sharjah SC",
@@ -215,6 +215,6 @@
   "checked_at": "2026-11-20T17:38Z"
  },
  "pause_notice": "2026-11-19",
- "forecast_key": "2026-11-20:Shabab Al Ahly-Ajman Club|2026-11-21:Baniyas-Al Nasr Dubai|2026-11-21:Dubai United-Al-Wahda|2026-11-21:Khor Fakkan-Jazira Abu Dhabi",
- "forecast_at": "2026-11-20T13:48Z"
+ "forecast_key": "2026-11-21:Baniyas-Al Nasr Dubai|2026-11-21:Dubai United-Al-Wahda|2026-11-21:Khor Fakkan-Jazira Abu Dhabi|2026-11-28:Al Wasl-Al Dhafra",
+ "forecast_at": "2026-11-20T17:40Z"
 }
