@@ -19,5 +19,19 @@
   "book": "baltbet",
   "ko": 1795188300.0,
   "at": "2026-11-20T13:07Z"
+ },
+ "Khor Fakkan|Jazira Abu Dhabi|2|2026-11-21": {
+  "ev": 0.04163613948990186,
+  "price": 1.42,
+  "book": "betcity",
+  "ko": 1795265100.0,
+  "at": "2026-11-21T02:57Z"
+ },
+ "Khor Fakkan|Jazira Abu Dhabi|O3|2026-11-21": {
+  "ev": 0.010648478445922205,
+  "price": 1.85,
+  "book": "fonbet",
+  "ko": 1795265100.0,
+  "at": "2026-11-21T02:59Z"
  }
 }
