@@ -186,18 +186,18 @@
    }
   },
   "pinnacle": {
-   "Al Jazira — Al Ain": {
-    "home": 3.04,
-    "away": 2.2,
-    "draw": 3.6
-   },
    "Al Wasl — Al Dhafra": {
     "home": 1.2475247524752475,
     "away": 8.5,
     "draw": 6.4
+   },
+   "Al Jazira — Al Ain": {
+    "home": 3.04,
+    "away": 2.2,
+    "draw": 3.6
    }
   },
-  "checked_at": "2026-11-27T01:26Z"
+  "checked_at": "2026-11-27T04:15Z"
  },
  "pause_notice": "2026-11-19",
  "forecast_key": "2026-11-28:Al Wasl-Al Dhafra|2026-12-03:Al-Wahda-Al Wasl|2026-12-03:Jazira Abu Dhabi-Al Ain|2026-12-04:Ajman Club-Dubai United|2026-12-04:Al Nasr Dubai-Shabab Al Ahly",
