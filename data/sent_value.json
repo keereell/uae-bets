@@ -1,37 +1,23 @@
 {
- "Kalba|Sharjah SC|2|2026-11-20": {
-  "ev": 0.06327295474811079,
-  "price": 2.05,
-  "book": "fonbet",
-  "ko": 1795178700.0,
-  "at": "2026-11-18T16:37Z"
+ "Al Nasr Dubai|Shabab Al Ahly|U3|2026-12-04": {
+  "ev": 0.05343149398988767,
+  "price": 1.88,
+  "book": "marathon",
+  "ko": 1796397900.0,
+  "at": "2026-11-27T17:18Z"
  },
- "Kalba|Sharjah SC|AH2+0|2026-11-20": {
-  "ev": 0.03289500028723413,
-  "price": 1.71,
+ "Al Nasr Dubai|Shabab Al Ahly|U2.5|2026-12-04": {
+  "ev": 0.08065982051829512,
+  "price": 2.5,
   "book": "baltbet",
-  "ko": 1795178700.0,
-  "at": "2026-11-18T16:47Z"
+  "ko": 1796397900.0,
+  "at": "2026-11-27T17:23Z"
  },
- "Shabab Al Ahly|Ajman Club|AH1-1|2026-11-20": {
-  "ev": 0.02129885034757173,
-  "price": 1.95,
+ "Al Nasr Dubai|Shabab Al Ahly|U3.5|2026-12-04": {
+  "ev": 0.038690984142118356,
+  "price": 1.58,
   "book": "baltbet",
-  "ko": 1795188300.0,
-  "at": "2026-11-20T13:07Z"
- },
- "Khor Fakkan|Jazira Abu Dhabi|2|2026-11-21": {
-  "ev": 0.04163613948990186,
-  "price": 1.42,
-  "book": "betcity",
-  "ko": 1795265100.0,
-  "at": "2026-11-21T02:57Z"
- },
- "Khor Fakkan|Jazira Abu Dhabi|O3|2026-11-21": {
-  "ev": 0.010648478445922205,
-  "price": 1.85,
-  "book": "fonbet",
-  "ko": 1795265100.0,
-  "at": "2026-11-21T02:59Z"
+  "ko": 1796397900.0,
+  "at": "2026-11-27T17:23Z"
  }
 }
