@@ -206,13 +206,30 @@
     "Двойной исход|X2": 1.32,
     "Двойной исход|12": 1.22,
     "Двойной исход|1X": 1.71
+   },
+   "Хатта — Аль-Иттихад Калба": {
+    "Фактический исход|P1": 3.6,
+    "Фактический исход|P2": 1.85,
+    "Фактический исход|X": 3.8,
+    "Фора|Kf_F1": 2.7,
+    "Фора|Kf_F2": 1.4,
+    "Тотал|Tm": 2.2,
+    "Тотал|Tb": 1.6,
+    "Двойной исход|X2": 1.24,
+    "Двойной исход|12": 1.22,
+    "Двойной исход|1X": 1.85
    }
   },
   "pinnacle": {
    "Al Wasl — Al Dhafra": {
-    "home": 1.2247191011235956,
-    "away": 10.03,
-    "draw": 7.15
+    "home": 1.209205020920502,
+    "away": 10.68,
+    "draw": 7.41
+   },
+   "Hatta — Al Ittihad Kalba": {
+    "home": 3.64,
+    "away": 1.8547008547008548,
+    "draw": 3.82
    },
    "Ajman — Dubai United": {
     "home": 1.9803921568627452,
@@ -230,7 +247,7 @@
     "draw": 3.93
    }
   },
-  "checked_at": "2026-11-28T12:59Z"
+  "checked_at": "2026-11-28T13:51Z"
  },
  "pause_notice": "2026-11-19",
  "forecast_key": "2026-11-28:Al Wasl-Al Dhafra|2026-12-03:Al-Wahda-Al Wasl|2026-12-03:Jazira Abu Dhabi-Al Ain|2026-12-04:Ajman Club-Dubai United|2026-12-04:Al Nasr Dubai-Shabab Al Ahly|2026-12-05:Al Dhafra-Baniyas|2026-12-05:Hatta Club-Kalba|2026-12-05:Sharjah SC-Khor Fakkan",
